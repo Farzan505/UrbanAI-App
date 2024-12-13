@@ -31,6 +31,11 @@
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
 
+    /* Chart specific colors */
+    --vis-primary-color: var(--chart-1);
+    --vis-secondary-color: var(--chart-2);
+    --vis-text-color: var(--foreground);
+
     /* Sidebar specific colors */
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 240 10% 3.9%;
@@ -68,6 +73,11 @@
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
 
+    /* Chart specific colors for dark mode */
+    --vis-primary-color: var(--chart-1);
+    --vis-secondary-color: var(--chart-2);
+    --vis-text-color: var(--foreground);
+
     /* Sidebar specific colors for dark mode */
     --sidebar-background: 240 5% 8%;
     --sidebar-foreground: 0 0% 98%;
@@ -87,4 +97,15 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Chart specific styles */
+.vis-line {
+  fill: none;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.vis-line-dots {
+  stroke: none;
 }
