@@ -75,6 +75,9 @@ import {
   Trash2,
 } from 'lucide-vue-next'
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 
 // Sample data
 const data = {
@@ -210,6 +213,11 @@ const activeTeam = ref(data.teams[0])
 
 function setActiveTeam(team: typeof data.teams[number]) {
   activeTeam.value = team
+}
+
+function handleLogout() {
+  localStorage.removeItem('token')
+  router.push('/login')
 }
 </script>
 
@@ -414,7 +422,7 @@ function setActiveTeam(team: typeof data.teams[number]) {
                     </DropdownMenuItem>
                   </DropdownMenuGroup>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem>
+                  <DropdownMenuItem @click="handleLogout">
                     <LogOut />
                     Log out
                   </DropdownMenuItem>
@@ -432,14 +440,8 @@ function setActiveTeam(team: typeof data.teams[number]) {
             <Separator orientation="vertical" class="mr-2 h-4" />
             <Breadcrumb>
               <BreadcrumbList>
-                <BreadcrumbItem class="hidden md:block">
-                  <BreadcrumbLink href="#">
-                    Building Your Application
-                  </BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator class="hidden md:block" />
                 <BreadcrumbItem>
-                  <BreadcrumbPage>Data Fetching</BreadcrumbPage>
+                  <BreadcrumbPage>Dashboard</BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>
@@ -448,13 +450,9 @@ function setActiveTeam(team: typeof data.teams[number]) {
             <ThemeToggle />
           </div>
         </header>
-        <div class="flex flex-1 flex-col gap-4 p-4 pt-0 bg-background">
-          <div class="grid auto-rows-min gap-4 md:grid-cols-3">
-            <div class="aspect-video rounded-xl bg-muted/50" />
-            <div class="aspect-video rounded-xl bg-muted/50" />
-            <div class="aspect-video rounded-xl bg-muted/50" />
-          </div>
-          <div class="min-h-[100vh] flex-1 rounded-xl bg-muted/50 md:min-h-min" />
+        <div class="flex flex-1 flex-col p-4 pt-0 bg-background">
+          <!-- Router view for child components -->
+          <router-view></router-view>
         </div>
       </SidebarInset>
     </SidebarProvider>
