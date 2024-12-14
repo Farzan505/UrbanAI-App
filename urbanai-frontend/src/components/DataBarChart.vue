@@ -12,8 +12,15 @@ import {
 } from 'chart.js'
 import { computed, ref, onMounted, watch } from 'vue'
 import Skeleton from './ui/skeleton/Skeleton.vue'
+import { Button } from './ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu'
+import { ChevronDown } from 'lucide-vue-next'
 
-// Rest of the code remains the same
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -134,9 +141,8 @@ const barChartData = computed(() => {
 })
 
 // Handle column selection
-const handleColumnChange = (event: Event) => {
-  const target = event.target as HTMLSelectElement
-  emit('update:selectedColumn', target.value)
+const handleColumnChange = (column: string) => {
+  emit('update:selectedColumn', column)
 }
 
 // Chart options
@@ -230,17 +236,23 @@ const chartOptions = computed(() => ({
 <template>
   <div class="flex flex-col gap-4 h-full">
     <div class="flex items-center gap-2">
-      <label class="text-sm font-medium">Select Column:</label>
-      <select
-        :value="selectedColumn"
-        @change="handleColumnChange"
-        class="rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
-        :disabled="loading"
-      >
-        <option v-for="column in columns" :key="column" :value="column">
-          {{ column }}
-        </option>
-      </select>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="sm" class="h-8">
+            {{ selectedColumn }}
+            <ChevronDown class="ml-2 h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" class="w-[200px]">
+          <DropdownMenuItem 
+            v-for="column in columns" 
+            :key="column"
+            @click="handleColumnChange(column)"
+          >
+            {{ column }}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
 
     <!-- Loading State -->

@@ -6,7 +6,7 @@
     </CardHeader>
     <CardContent class="p-0 h-[calc(100%-3.5rem)]">
       <div v-if="loading" class="w-full h-full">
-        <Skeleton class="h-full w-full" />
+        <Skeleton class="h-full w-full shadow-none" />
       </div>
       <div v-else ref="mapContainer" id="viewDiv" class="w-full h-full"></div>
     </CardContent>
