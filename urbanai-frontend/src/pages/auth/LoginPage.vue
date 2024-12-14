@@ -75,16 +75,16 @@ const handleLogin = async (event: Event) => {
       <div class="mx-auto grid w-[350px] gap-6">
         <div class="grid gap-2 text-center">
           <div class="flex justify-between items-center">
-            <h1 class="text-3xl font-bold">Login</h1>
+            <h1 class="text-3xl font-bold">Anmelden</h1>
             <ThemeToggle />
           </div>
           <p class="text-balance text-muted-foreground">
-            Enter your email below to login to your account
+            E-Mail Adresse eingeben
           </p>
         </div>
         <form @submit.prevent="handleLogin" class="grid gap-4">
           <div class="grid gap-2">
-            <Label for="email">Email</Label>
+            <Label for="email">E-Mail</Label>
             <Input
               id="email"
               v-model="email"
@@ -95,13 +95,13 @@ const handleLogin = async (event: Event) => {
           </div>
           <div class="grid gap-2">
             <div class="flex items-center">
-              <Label for="password">Password</Label>
+              <Label for="password">Passwort</Label>
 
               <a
                 href="/forgot-password"
                 class="ml-auto inline-block text-sm underline"
               >
-                Forgot your password?
+              Haben Sie Ihr Kennwort vergessen?
               </a>
             </div>
             <Input 
@@ -119,7 +119,7 @@ const handleLogin = async (event: Event) => {
             class="w-full"
             :disabled="loading"
           >
-            {{ loading ? 'Logging in...' : 'Login' }}
+            {{ loading ? 'Logging in...' : 'Anmelden' }}
           </Button>
         </form>
       </div>

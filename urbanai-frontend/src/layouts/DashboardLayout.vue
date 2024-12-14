@@ -51,28 +51,20 @@ import {
 } from '../components/ui/sidebar'
 import ThemeToggle from '../components/ui/ThemeToggle.vue'
 import {
-  AudioWaveform,
-  BadgeCheck,
-  Bell,
   BookOpen,
   Bot,
   ChevronRight,
   ChevronsUpDown,
-  Command,
-  CreditCard,
-  Folder,
-  Forward,
-  Frame,
   GalleryVerticalEnd,
   LogOut,
-  Map,
   MoreHorizontal,
-  PieChart,
   Plus,
   Settings2,
-  Sparkles,
   SquareTerminal,
   Trash2,
+  HousePlus,
+  Building2,
+  CircleGauge,
 } from 'lucide-vue-next'
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -82,131 +74,84 @@ const router = useRouter()
 // Sample data
 const data = {
   user: {
-    name: 'shadcn',
-    email: 'm@example.com',
+    name: 'FarzanB',
+    email: 'Farzan.banihashemi@tum.de',
     avatar: '/avatars/shadcn.jpg',
   },
   teams: [
     {
-      name: 'Acme Inc',
+      name: 'Decotwo',
       logo: GalleryVerticalEnd,
-      plan: 'Enterprise',
-    },
-    {
-      name: 'Acme Corp.',
-      logo: AudioWaveform,
-      plan: 'Startup',
-    },
-    {
-      name: 'Evil Corp.',
-      logo: Command,
-      plan: 'Free',
-    },
+      plan: 'TUM',
+    }
   ],
   navMain: [
     {
-      title: 'Playground',
+      title: 'Dashboard',
       url: '#',
-      icon: SquareTerminal,
+      icon: CircleGauge,
       isActive: true,
-      items: [
-        {
-          title: 'History',
-          url: '#',
-        },
-        {
-          title: 'Starred',
-          url: '#',
-        },
-        {
-          title: 'Settings',
-          url: '#',
-        },
-      ],
+
     },
     {
-      title: 'Models',
+      title: 'Gebäudeanalyse',
       url: '#',
-      icon: Bot,
-      items: [
-        {
-          title: 'Genesis',
-          url: '#',
-        },
-        {
-          title: 'Explorer',
-          url: '#',
-        },
-        {
-          title: 'Quantum',
-          url: '#',
-        },
-      ],
+      icon: HousePlus,
     },
     {
-      title: 'Documentation',
+      title: 'Portfolionalyse',
+      url: '#',
+      icon: Building2,
+    },
+    {
+      title: 'Dokumentation',
       url: '#',
       icon: BookOpen,
       items: [
+
         {
-          title: 'Introduction',
+          title: 'Anleitungen',
           url: '#',
         },
         {
-          title: 'Get Started',
-          url: '#',
-        },
-        {
-          title: 'Tutorials',
-          url: '#',
-        },
-        {
-          title: 'Changelog',
+          title: 'Änderungsliste',
           url: '#',
         },
       ],
     },
     {
-      title: 'Settings',
+      title: 'Einstellungen',
       url: '#',
       icon: Settings2,
       items: [
         {
-          title: 'General',
+          title: 'Allgemein',
           url: '#',
         },
         {
-          title: 'Team',
-          url: '#',
-        },
-        {
-          title: 'Billing',
-          url: '#',
-        },
-        {
-          title: 'Limits',
+          title: 'Kostenkennwerte',
           url: '#',
         },
       ],
     },
   ],
-  projects: [
-    {
-      name: 'Design Engineering',
-      url: '#',
-      icon: Frame,
-    },
-    {
-      name: 'Sales & Marketing',
-      url: '#',
-      icon: PieChart,
-    },
-    {
-      name: 'Travel',
-      url: '#',
-      icon: Map,
-    },
-  ],
+  // projects: [
+  //   {
+  //     name: 'Design Engineering',
+  //     url: '#',
+  //     icon: Frame,
+  //   },
+  //   {
+  //     name: 'Sales & Marketing',
+  //     url: '#',
+  //     icon: PieChart,
+  //   },
+  //   {
+  //     name: 'Travel',
+  //     url: '#',
+  //     icon: Map,
+  //   },
+  // ],
 }
 
 const activeTeam = ref(data.teams[0])
@@ -316,51 +261,7 @@ function handleLogout() {
               </Collapsible>
             </SidebarMenu>
           </SidebarGroup>
-          <SidebarGroup class="group-data-[collapsible=icon]:hidden">
-            <SidebarGroupLabel>Projects</SidebarGroupLabel>
-            <SidebarMenu>
-              <SidebarMenuItem
-                v-for="item in data.projects"
-                :key="item.name"
-              >
-                <SidebarMenuButton as-child>
-                  <a :href="item.url">
-                    <component :is="item.icon" />
-                    <span>{{ item.name }}</span>
-                  </a>
-                </SidebarMenuButton>
-                <DropdownMenu>
-                  <DropdownMenuTrigger as-child>
-                    <SidebarMenuAction show-on-hover>
-                      <MoreHorizontal />
-                      <span class="sr-only">More</span>
-                    </SidebarMenuAction>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent class="w-48 rounded-lg" side="bottom" align="end">
-                    <DropdownMenuItem>
-                      <Folder class="text-muted-foreground" />
-                      <span>View Project</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <Forward class="text-muted-foreground" />
-                      <span>Share Project</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem>
-                      <Trash2 class="text-muted-foreground" />
-                      <span>Delete Project</span>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton class="text-[hsl(var(--sidebar-foreground))]/70">
-                  <MoreHorizontal class="text-[hsl(var(--sidebar-foreground))]/70" />
-                  <span>More</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroup>
+          
         </SidebarContent>
         <SidebarFooter>
           <SidebarMenu>
@@ -374,7 +275,7 @@ function handleLogout() {
                     <Avatar class="h-8 w-8 rounded-lg">
                       <AvatarImage :src="data.user.avatar" :alt="data.user.name" />
                       <AvatarFallback class="rounded-lg">
-                        CN
+                        FB
                       </AvatarFallback>
                     </Avatar>
                     <div class="grid flex-1 text-left text-sm leading-tight">
@@ -390,7 +291,7 @@ function handleLogout() {
                       <Avatar class="h-8 w-8 rounded-lg">
                         <AvatarImage :src="data.user.avatar" :alt="data.user.name" />
                         <AvatarFallback class="rounded-lg">
-                          CN
+                          FB
                         </AvatarFallback>
                       </Avatar>
                       <div class="grid flex-1 text-left text-sm leading-tight">
@@ -400,31 +301,34 @@ function handleLogout() {
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuGroup>
-                    <DropdownMenuItem>
-                      <Sparkles />
-                      Upgrade to Pro
-                    </DropdownMenuItem>
+                  <!--
+                            <DropdownMenuGroup>
+                            <DropdownMenuItem>
+                              <Sparkles />
+                              Upgrade to Pro
+                            </DropdownMenuItem>
+                            </DropdownMenuGroup>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuGroup>
+                            <DropdownMenuItem>
+                              <BadgeCheck />
+                              Account
+                            </DropdownMenuItem>
+                            <DropdownMenuItem>
+                              <CreditCard />
+                              Billing
+                            </DropdownMenuItem>
+                            <DropdownMenuItem>
+                              <Bell />
+                              Notifications
+                            </DropdownMenuItem>
+                  
                   </DropdownMenuGroup>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuGroup>
-                    <DropdownMenuItem>
-                      <BadgeCheck />
-                      Account
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <CreditCard />
-                      Billing
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <Bell />
-                      Notifications
-                    </DropdownMenuItem>
-                  </DropdownMenuGroup>
+                  -->
                   <DropdownMenuSeparator />
                   <DropdownMenuItem @click="handleLogout">
                     <LogOut />
-                    Log out
+                    Ausloggen
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

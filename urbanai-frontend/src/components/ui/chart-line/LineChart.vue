@@ -9,12 +9,18 @@ import { useMounted } from '@vueuse/core'
 import { type Component, computed, ref } from 'vue'
 
 const props = withDefaults(defineProps<BaseChartProps<T> & {
+  /**
+   * Render custom tooltip component.
+   */
   customTooltip?: Component
+  /**
+   * Type of curve
+   */
   curveType?: CurveType
 }>(), {
-  curveType: CurveType.Linear,
+  curveType: CurveType.MonotoneX,
   filterOpacity: 0.2,
-  margin: () => ({ top: 20, bottom: 40, left: 40, right: 20 }),
+  margin: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
   showXAxis: true,
   showYAxis: true,
   showTooltip: true,
@@ -43,11 +49,6 @@ const isMounted = useMounted()
 function handleLegendItemClick(d: BulletLegendItemInterface, i: number) {
   emits('legendItemClick', d, i)
 }
-
-// Function to check if a category has only one data point
-function isSinglePoint(category: string): boolean {
-  return props.data.filter(d => d[category] !== undefined).length === 1
-}
 </script>
 
 <template>
@@ -55,7 +56,7 @@ function isSinglePoint(category: string): boolean {
     <ChartLegend v-if="showLegend" v-model:items="legendItems" @legend-item-click="handleLegendItemClick" />
 
     <VisXYContainer
-      :margin="margin"
+      :margin="{ left: 20, right: 20 }"
       :data="data"
       :style="{ height: isMounted ? '100%' : 'auto' }"
     >
@@ -63,23 +64,14 @@ function isSinglePoint(category: string): boolean {
 
       <template v-for="(category, i) in categories" :key="category">
         <VisLine
-          :x="(d: Data) => Number(d[index])"
-          :y="(d: Data) => Number(d[category])"
+          :x="(d: Data, i: number) => i"
+          :y="(d: Data) => d[category]"
           :curve-type="curveType"
           :color="colors[i]"
-          :show-line="!isSinglePoint(category)"
           :attributes="{
             [Line.selectors.line]: {
-              opacity: legendItems.find((item: BulletLegendItemInterface) => item.name === category)?.inactive ? filterOpacity : 1,
-              'stroke-width': 2,
-              stroke: colors[i]
+              opacity: legendItems.find(item => item.name === category)?.inactive ? filterOpacity : 1,
             },
-            [Line.selectors.dots]: {
-              fill: colors[i],
-              r: isSinglePoint(category) ? 6 : 4,
-              stroke: colors[i],
-              'stroke-width': isSinglePoint(category) ? 2 : 1
-            }
           }"
         />
       </template>
@@ -87,18 +79,17 @@ function isSinglePoint(category: string): boolean {
       <VisAxis
         v-if="showXAxis"
         type="x"
-        :tick-format="xFormatter ?? ((v: number) => v.toString())"
-        :grid-line="showGridLine"
-        :tick-line="true"
-        :domain-line="true"
+        :tick-format="xFormatter ?? ((v: number) => data[v]?.[index])"
+        :grid-line="false"
+        :tick-line="false"
         tick-text-color="hsl(var(--vis-text-color))"
       />
       <VisAxis
         v-if="showYAxis"
         type="y"
-        :tick-line="true"
+        :tick-line="false"
         :tick-format="yFormatter"
-        :domain-line="true"
+        :domain-line="false"
         :grid-line="showGridLine"
         :attributes="{
           [Axis.selectors.grid]: {
@@ -107,6 +98,8 @@ function isSinglePoint(category: string): boolean {
         }"
         tick-text-color="hsl(var(--vis-text-color))"
       />
+
+      <slot />
     </VisXYContainer>
   </div>
 </template>
