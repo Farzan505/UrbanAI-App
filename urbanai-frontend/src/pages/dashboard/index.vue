@@ -3,8 +3,8 @@ import { onMounted, ref, provide, shallowRef } from 'vue'
 import type { Router } from 'vue-router'
 import { useRouter } from 'vue-router'
 import ArcGISMap from '../../components/map/ArcGISMap.vue'
-import { LineChart } from '@/components/ui/chart-line'
-import { colorMode } from '@/composables/useTheme'
+import GrowthRateChart from '../../components/GrowthRateChart.vue'
+import { colorMode } from '../../composables/useTheme'
 
 const router: Router = useRouter()
 const activeTab = ref(0)
@@ -32,7 +32,8 @@ const growthData = [
   { 'year': 1975, 'Export Growth Rate': 1.79, 'Import Growth Rate': 1.64 },
   // Single point data
   { 'year': 1976, 'Single Point': 1.85 },
-  { 'year': 1977}
+  { 'year': 1977},
+  { 'year': 1980, 'Single Point': 1.85 },
 ]
 </script>
 
@@ -74,10 +75,8 @@ const growthData = [
               <div class="h-full p-4 border rounded-lg bg-card flex flex-col">
                 <h3 class="text-lg font-medium mb-4">Import/Export Growth Rates</h3>
                 <div class="flex-1 min-h-0">
-                  <LineChart
+                  <GrowthRateChart
                     :data="growthData"
-                    index="year"
-                    :categories="['Export Growth Rate', 'Import Growth Rate', 'Single Point']"
                     class="h-full w-full"
                   />
                 </div>
