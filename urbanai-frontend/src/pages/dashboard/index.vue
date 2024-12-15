@@ -47,6 +47,7 @@ const growthData = ref([
     year: 2019,
     'Export Growth Rate': 2.5,
     'Import Growth Rate': 1.8,
+    'singlePoint': 3.5,
   },
   {
     year: 2020,
