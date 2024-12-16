@@ -9,9 +9,14 @@
         <Skeleton class="h-full w-full shadow-none" />
       </div>
       <div v-else ref="mapContainer" id="viewDiv" class="w-full h-full">
-        <calcite-panel id="pickerContainer" heading="Select Feature Property" width-scale="l" height-scale="l">
+        <calcite-panel id="pickerContainer" heading="Filter Features" width-scale="l" height-scale="l">
           <div class="panel-content">
+            <calcite-label>Select Property</calcite-label>
             <calcite-combobox id="featurePicker" placeholder="Pick a Feature Property" selection-mode="single">
+            </calcite-combobox>
+            
+            <calcite-label>Select Values</calcite-label>
+            <calcite-combobox id="valuePicker" placeholder="Select Values" selection-mode="multiple">
             </calcite-combobox>
           </div>
         </calcite-panel>
@@ -51,7 +56,7 @@ declare const require: {
 
 const ARCGIS_API_KEY = import.meta.env.VITE_ARCGIS_API
 const selectedFeature = ref<string[]>(['gebort'])
-const selectedValue = ref<string>('')
+const selectedValues = ref<string[]>([])
 const availableColumns = ref<string[]>([])
 const uniqueValues = ref<string[]>([])
 const mapView = shallowRef<any>(null)
@@ -78,10 +83,12 @@ const currentBasemap = computed(() => {
 
 // Filtered features based on selection
 const filteredFeatures = computed(() => {
-  if (!mapData.value || !selectedValue.value) return mapData.value?.features
+  if (!mapData.value || !selectedFeature.value[0]) return mapData.value?.features
+
+  if (selectedValues.value.length === 0) return mapData.value.features
 
   return mapData.value.features.filter(feature => 
-    String(feature.properties[selectedFeature.value[0]]) === selectedValue.value
+    selectedValues.value.includes(String(feature.properties[selectedFeature.value[0]]))
   )
 })
 
@@ -143,6 +150,19 @@ function updateUniqueValues() {
   uniqueValues.value = [...new Set(mapData.value.features.map(
     feature => String(feature.properties[selectedFeature.value[0]])
   ))].sort()
+
+  // Update value picker items
+  const valuePicker = document.getElementById("valuePicker") as CalciteCombobox
+  if (valuePicker) {
+    valuePicker.innerHTML = ''
+    uniqueValues.value.forEach(value => {
+      const item = document.createElement("calcite-combobox-item") as CalciteComboboxItem
+      item.value = value
+      item.setAttribute('text-label', value)
+      item.innerHTML = value
+      valuePicker.appendChild(item)
+    })
+  }
 }
 
 async function updateMapLayers() {
@@ -273,7 +293,7 @@ async function updateMapLayers() {
     }
 
     // Zoom to filtered features extent if needed
-    if (selectedValue.value && filteredData.features.length > 0) {
+    if (selectedValues.value.length > 0 && filteredData.features.length > 0) {
       const layers = groupLayer.value.layers.toArray()
       if (layers.length > 0) {
         await layers[0].when()
@@ -432,6 +452,7 @@ async function initializeMap() {
           const selectedProp = event.target.selectedItems[0]?.value
           if (selectedProp) {
             selectedFeature.value = [selectedProp]
+            selectedValues.value = []
             updateUniqueValues()
             updateMapLayers()
           }
@@ -439,6 +460,15 @@ async function initializeMap() {
 
         // Set initial value
         featurePicker.value = selectedFeature.value[0]
+      }
+
+      // Initialize value picker
+      const valuePicker = document.getElementById("valuePicker") as CalciteCombobox
+      if (valuePicker) {
+        valuePicker.addEventListener("calciteComboboxChange", (event: any) => {
+          selectedValues.value = event.target.selectedItems.map((item: any) => item.value)
+          updateMapLayers()
+        })
       }
     }
 
@@ -465,12 +495,12 @@ async function initializeMap() {
 // Watch for changes in selected feature
 watch(selectedFeature, () => {
   updateUniqueValues()
-  selectedValue.value = ''
+  selectedValues.value = []
   updateMapLayers()
 })
 
-// Watch for changes in selected value
-watch(selectedValue, () => {
+// Watch for changes in selected values
+watch(selectedValues, () => {
   updateMapLayers()
 })
 
@@ -563,7 +593,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 2px;
+  padding: 12px;
   width: 330px;
   height: 300px;
 }
