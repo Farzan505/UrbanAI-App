@@ -8,7 +8,14 @@
       <div v-if="loading" class="w-full h-full">
         <Skeleton class="h-full w-full shadow-none" />
       </div>
-      <div v-else ref="mapContainer" id="viewDiv" class="w-full h-full"></div>
+      <div v-else ref="mapContainer" id="viewDiv" class="w-full h-full">
+        <calcite-panel id="pickerContainer" heading="Select Feature Property" width-scale="l" height-scale="l">
+          <div class="panel-content">
+            <calcite-combobox id="featurePicker" placeholder="Pick a Feature Property" selection-mode="single">
+            </calcite-combobox>
+          </div>
+        </calcite-panel>
+      </div>
     </CardContent>
   </Card>
 </template>
@@ -18,7 +25,7 @@ import { onMounted, ref, watch, computed, nextTick, onUnmounted, shallowRef } fr
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/card'
 import { Skeleton } from '../ui/skeleton'
 import { useColorMode } from '@vueuse/core'
-import { useMapData } from '@/composables/useMapData'
+import { useMapData } from '../../composables/useMapData'
 
 interface Feature {
   id: string
@@ -27,12 +34,26 @@ interface Feature {
   geometry: any
 }
 
+// Calcite component types
+interface CalciteCombobox extends HTMLElement {
+  value: string
+  selectedItems: Array<{ value: string }>
+}
+
+interface CalciteComboboxItem extends HTMLElement {
+  value: string
+  setAttribute(name: string, value: string): void
+}
+
 declare const require: {
   (modules: string[], callback: (...args: any[]) => void): void
 }
 
 const ARCGIS_API_KEY = import.meta.env.VITE_ARCGIS_API
 const selectedFeature = ref<string[]>(['gebort'])
+const selectedValue = ref<string>('')
+const availableColumns = ref<string[]>([])
+const uniqueValues = ref<string[]>([])
 const mapView = shallowRef<any>(null)
 const mapContainer = ref<HTMLElement | null>(null)
 const map = shallowRef<any>(null)
@@ -55,6 +76,15 @@ const currentBasemap = computed(() => {
   return colorMode.value === 'dark' ? DARK_BASEMAP : LIGHT_BASEMAP
 })
 
+// Filtered features based on selection
+const filteredFeatures = computed(() => {
+  if (!mapData.value || !selectedValue.value) return mapData.value?.features
+
+  return mapData.value.features.filter(feature => 
+    String(feature.properties[selectedFeature.value[0]]) === selectedValue.value
+  )
+})
+
 function loadArcGISModules(): Promise<void> {
   return new Promise((resolve, reject) => {
     require([
@@ -68,7 +98,8 @@ function loadArcGISModules(): Promise<void> {
       "esri/symbols/SimpleFillSymbol",
       "esri/symbols/SimpleMarkerSymbol",
       "esri/widgets/Legend",
-      "esri/widgets/Expand"
+      "esri/widgets/Expand",
+      "esri/widgets/LayerList"
     ], function(
       esriConfig: any,
       Map: any,
@@ -80,7 +111,8 @@ function loadArcGISModules(): Promise<void> {
       SimpleFillSymbol: any,
       SimpleMarkerSymbol: any,
       Legend: any,
-      Expand: any
+      Expand: any,
+      LayerList: any
     ) {
       try {
         (window as any).arcgisModules = {
@@ -94,7 +126,8 @@ function loadArcGISModules(): Promise<void> {
           SimpleFillSymbol,
           SimpleMarkerSymbol,
           Legend,
-          Expand
+          Expand,
+          LayerList
         }
         resolve()
       } catch (err) {
@@ -104,34 +137,36 @@ function loadArcGISModules(): Promise<void> {
   })
 }
 
-async function initializeMap() {
-  const data = await fetchMapData()
-  if (!data || !mapContainer.value) return
+function updateUniqueValues() {
+  if (!mapData.value) return
+
+  uniqueValues.value = [...new Set(mapData.value.features.map(
+    feature => String(feature.properties[selectedFeature.value[0]])
+  ))].sort()
+}
+
+async function updateMapLayers() {
+  if (!mapData.value || !groupLayer.value) return
 
   const modules = (window as any).arcgisModules
   if (!modules) return
 
   try {
     const {
-      esriConfig,
-      Map,
-      MapView,
       GeoJSONLayer,
-      GroupLayer,
       UniqueValueRenderer,
       SimpleFillSymbol,
-      SimpleMarkerSymbol,
-      Legend,
-      Expand
+      SimpleMarkerSymbol
     } = modules
 
-    esriConfig.apiKey = ARCGIS_API_KEY
-
-    const geojsonBlob = new Blob([JSON.stringify(data)], { type: "application/json" })
-    const geojsonUrl = URL.createObjectURL(geojsonBlob)
+    // Create filtered GeoJSON
+    const filteredData = {
+      type: "FeatureCollection",
+      features: filteredFeatures.value || []
+    }
 
     // Extract unique values for coloring
-    const uniqueValues = [...new Set(data.features.map(
+    const values = [...new Set(filteredData.features.map(
       (feature: Feature) => feature.properties[selectedFeature.value[0]]
     ))]
     
@@ -140,7 +175,7 @@ async function initializeMap() {
                    "#a553b7ff", "#fff799ff", "#b1a9d0ff", "#6ecffcff", "#fc6f84ff", 
                    "#6af689ff", "#fcd27eff"]
     const colorMap: Record<string, string> = {}
-    uniqueValues.forEach((value, index) => {
+    values.forEach((value, index) => {
       const color = colors[index % colors.length]
       const rgbaColor = color.replace(/ff$/, 'cc')
       colorMap[String(value)] = rgbaColor
@@ -149,7 +184,7 @@ async function initializeMap() {
     // Create renderers
     const fillRenderer = new UniqueValueRenderer({
       field: selectedFeature.value[0],
-      uniqueValueInfos: uniqueValues.map(value => ({
+      uniqueValueInfos: values.map(value => ({
         value: value,
         symbol: new SimpleFillSymbol({
           color: colorMap[String(value)],
@@ -164,7 +199,7 @@ async function initializeMap() {
 
     const pointRenderer = new UniqueValueRenderer({
       field: selectedFeature.value[0],
-      uniqueValueInfos: uniqueValues.map(value => ({
+      uniqueValueInfos: values.map(value => ({
         value: value,
         symbol: new SimpleMarkerSymbol({
           color: colorMap[String(value)],
@@ -178,16 +213,21 @@ async function initializeMap() {
       }))
     })
 
+    // Create GeoJSON blob
+    const geojsonBlob = new Blob([JSON.stringify(filteredData)], { type: "application/json" })
+    const geojsonUrl = URL.createObjectURL(geojsonBlob)
+
     // Create layers
     const detailedLayer = new GeoJSONLayer({
       url: geojsonUrl,
       renderer: fillRenderer,
       outFields: ["*"],
+      title: "Detailed View",
       popupTemplate: {
         title: "{gebid}",
         content: [{
           type: "fields",
-          fieldInfos: Object.keys(data.features[0].properties).map(prop => ({
+          fieldInfos: Object.keys(mapData.value.features[0].properties).map(prop => ({
             fieldName: prop,
             label: prop
           }))
@@ -201,11 +241,12 @@ async function initializeMap() {
       url: geojsonUrl,
       renderer: pointRenderer,
       outFields: ["*"],
+      title: "Overview",
       popupTemplate: {
         title: "{gebid}",
         content: [{
           type: "fields",
-          fieldInfos: Object.keys(data.features[0].properties).map(prop => ({
+          fieldInfos: Object.keys(mapData.value.features[0].properties).map(prop => ({
             fieldName: prop,
             label: prop
           }))
@@ -215,10 +256,70 @@ async function initializeMap() {
       maxScale: 10000
     })
 
-    const newGroupLayer = new GroupLayer({
-      layers: [detailedLayer, overviewLayer]
-    })
+    // Update group layer
+    groupLayer.value.removeAll()
+    groupLayer.value.add(detailedLayer)
+    groupLayer.value.add(overviewLayer)
 
+    // Update legend
+    if (mapView.value) {
+      const legend = mapView.value.ui.find((widget: any) => widget.container?.className?.includes('esri-legend'))
+      if (legend) {
+        legend.layerInfos = [{
+          layer: groupLayer.value,
+          title: selectedFeature.value[0]
+        }]
+      }
+    }
+
+    // Zoom to filtered features extent if needed
+    if (selectedValue.value && filteredData.features.length > 0) {
+      const layers = groupLayer.value.layers.toArray()
+      if (layers.length > 0) {
+        await layers[0].when()
+        const extent = await layers[0].queryExtent()
+        if (extent && extent.extent) {
+          mapView.value.goTo(extent.extent, { duration: 1000 })
+        }
+      }
+    }
+
+  } catch (err: any) {
+    error.value = err.message || 'Error updating map layers'
+    console.error('Map layer update error:', err)
+  }
+}
+
+async function initializeMap() {
+  const data = await fetchMapData()
+  if (!data || !mapContainer.value) return
+
+  // Set available columns from the first feature's properties
+  if (data.features.length > 0) {
+    availableColumns.value = Object.keys(data.features[0].properties)
+    updateUniqueValues()
+  }
+
+  const modules = (window as any).arcgisModules
+  if (!modules) return
+
+  try {
+    const {
+      esriConfig,
+      Map,
+      MapView,
+      GroupLayer,
+      Legend,
+      Expand,
+      LayerList
+    } = modules
+
+    esriConfig.apiKey = ARCGIS_API_KEY
+
+    const newGroupLayer = new GroupLayer({
+      title: "Features",
+      visibilityMode: "exclusive"
+    })
     groupLayer.value = newGroupLayer
 
     // Create or update map instance
@@ -239,7 +340,10 @@ async function initializeMap() {
         container: mapContainer.value,
         map: map.value,
         zoom: 12,
-        center: [11.5820, 48.1351]
+        center: [11.5820, 48.1351],
+        ui: {
+          components: ["zoom", "compass", "attribution"]
+        }
       })
 
       // Handle click events
@@ -247,7 +351,7 @@ async function initializeMap() {
         mapView.value.hitTest(event).then((response: { results: any[] }) => {
           const results = response.results.filter((result: { graphic: any; layer: any }) => 
             result.graphic && result.graphic.layer && 
-            (result.graphic.layer === detailedLayer || result.graphic.layer === overviewLayer)
+            result.graphic.layer.parent === groupLayer.value
           )
           
           if (results.length > 0) {
@@ -263,36 +367,93 @@ async function initializeMap() {
           }
         })
       })
+
+      // Add legend
+      const legend = new Legend({
+        view: mapView.value,
+        layerInfos: [{
+          layer: groupLayer.value,
+          title: selectedFeature.value[0]
+        }]
+      })
+
+      const legendExpand = new Expand({
+        view: mapView.value,
+        content: legend,
+        expandIconClass: "esri-icon-legend",
+        group: "top-left"
+      })
+
+      // Add layer list
+      const layerList = new LayerList({
+        view: mapView.value,
+        listItemCreatedFunction: (event: any) => {
+          const item = event.item
+          if (item.layer.type === "group") {
+            item.panel = {
+              content: "legend",
+              open: true
+            }
+          }
+        }
+      })
+
+      const layerListExpand = new Expand({
+        view: mapView.value,
+        content: layerList,
+        expandIconClass: "esri-icon-layer-list",
+        group: "top-left"
+      })
+
+      // Add feature picker panel
+      const pickerContainer = document.getElementById("pickerContainer")
+      const pickerExpand = new Expand({
+        view: mapView.value,
+        content: pickerContainer,
+        expandIconClass: "esri-icon-filter",
+        group: "top-left"
+      })
+
+      mapView.value.ui.add([legendExpand, layerListExpand, pickerExpand], "top-left")
+
+      // Initialize feature picker
+      const featurePicker = document.getElementById("featurePicker") as CalciteCombobox
+      if (featurePicker && data.features.length > 0) {
+        const propertyNames = Object.keys(data.features[0].properties)
+        propertyNames.forEach(prop => {
+          const item = document.createElement("calcite-combobox-item") as CalciteComboboxItem
+          item.value = prop
+          item.setAttribute('text-label', prop)
+          item.innerHTML = prop
+          featurePicker.appendChild(item)
+        })
+
+        featurePicker.addEventListener("calciteComboboxChange", (event: any) => {
+          const selectedProp = event.target.selectedItems[0]?.value
+          if (selectedProp) {
+            selectedFeature.value = [selectedProp]
+            updateUniqueValues()
+            updateMapLayers()
+          }
+        })
+
+        // Set initial value
+        featurePicker.value = selectedFeature.value[0]
+      }
     }
 
-    // Wait for the view to be ready
+    // Update layers with initial data
+    await updateMapLayers()
+
+    // Wait for layers to load and zoom to extent
     await mapView.value.when()
-
-    // Add legend
-    const legend = new Legend({
-      view: mapView.value,
-      layerInfos: [{
-        layer: groupLayer.value,
-        title: selectedFeature.value[0]
-      }]
-    })
-
-    const legendExpand = new Expand({
-      view: mapView.value,
-      content: legend,
-      expandIconClass: "esri-icon-layer-list",
-      group: "top-right"
-    })
-
-    // Clear existing UI components
-    mapView.value.ui.empty("top-right")
-    mapView.value.ui.add(legendExpand, "top-right")
-
-    // Zoom to data extent
-    await detailedLayer.when()
-    const extent = await detailedLayer.queryExtent()
-    if (extent && extent.extent) {
-      mapView.value.goTo(extent.extent, { duration: 1000 })
+    const layers = groupLayer.value.layers.toArray()
+    if (layers.length > 0) {
+      await layers[0].when()
+      const extent = await layers[0].queryExtent()
+      if (extent && extent.extent) {
+        mapView.value.goTo(extent.extent, { duration: 1000 })
+      }
     }
 
   } catch (err: any) {
@@ -300,6 +461,18 @@ async function initializeMap() {
     console.error('Map initialization error:', err)
   }
 }
+
+// Watch for changes in selected feature
+watch(selectedFeature, () => {
+  updateUniqueValues()
+  selectedValue.value = ''
+  updateMapLayers()
+})
+
+// Watch for changes in selected value
+watch(selectedValue, () => {
+  updateMapLayers()
+})
 
 // Handle theme changes
 watch(currentBasemap, async () => {
@@ -326,6 +499,18 @@ async function initializeArcGIS() {
     link.rel = 'stylesheet'
     link.href = 'https://js.arcgis.com/4.29/esri/themes/light/main.css'
     document.head.appendChild(link)
+
+    // Load Calcite Components CSS
+    const calciteLink = document.createElement('link')
+    calciteLink.rel = 'stylesheet'
+    calciteLink.href = 'https://js.arcgis.com/calcite-components/2.9.0/calcite.css'
+    document.head.appendChild(calciteLink)
+
+    // Load Calcite Components JS
+    const calciteScript = document.createElement('script')
+    calciteScript.type = 'module'
+    calciteScript.src = 'https://js.arcgis.com/calcite-components/2.9.0/calcite.esm.js'
+    document.head.appendChild(calciteScript)
 
     // Load ArcGIS JavaScript
     await new Promise<void>((resolve, reject) => {
@@ -372,6 +557,29 @@ onUnmounted(() => {
   margin: 0;
   height: 100%;
   width: 100%;
+}
+
+.panel-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 2px;
+  width: 330px;
+  height: 300px;
+}
+
+calcite-combobox {
+  --calcite-ui-height: 10rem;
+}
+
+calcite-combobox-item {
+  height: 3rem;
+  line-height: 3rem;
+}
+
+calcite-combobox-item::part(container) {
+  max-height: 400px;
+  overflow-y: auto;
 }
 
 .esri-view .esri-view-surface--touch-none:focus::after {

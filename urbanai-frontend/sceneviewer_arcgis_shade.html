@@ -1,0 +1,387 @@
+
+
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>3D Map with Measurement Tool Button</title>
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no">
+    <!-- Esri CSS -->
+    <link rel="stylesheet" href="https://js.arcgis.com/4.29/esri/themes/light/main.css">
+    <!-- Esri JS -->
+    <script src="https://js.arcgis.com/4.29/"></script>
+    <!-- Calcite Components -->
+    <script type="module" src="https://js.arcgis.com/calcite-components/2.9.0/calcite.esm.js"></script>
+    <link rel="stylesheet" href="https://js.arcgis.com/calcite-components/2.9.0/calcite.css">
+    <!-- Polyfills -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-polyfill/7.12.1/polyfill.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fetch/3.6.2/fetch.min.js"></script>
+    <style>
+        html, body, #viewDiv {
+            padding: 0;
+            margin: 0;
+            height: 100%;
+            width: 100%;
+        }
+
+        .panel-content {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 2px;
+            width: 330px;
+            height: 300px;
+        }
+
+        calcite-combobox {
+            --calcite-ui-height: 10rem;
+        }
+
+        calcite-combobox-item {
+            height: 3rem;
+            line-height: 3rem;
+        }
+
+        calcite-combobox-item::part(container) {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        /* Optional: Style for the active measurement button */
+        .active-button {
+            background-color: #0079c1;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div id="viewDiv"></div>
+    <calcite-panel id="pickerContainer" heading="Select Feature Property" width-scale="l" height-scale="l">
+        <div class="panel-content">
+            <calcite-combobox id="featurePicker" placeholder="Pick a Feature Property" selection-mode="single">
+            </calcite-combobox>
+        </div>
+    </calcite-panel>
+
+    <script>
+        const data = __GEOJSON_DATA__;  // Replace with your actual GeoJSON data
+        const contextData = __CONTEXT_GEOJSON_DATA__;  // Replace with your actual context GeoJSON data
+
+        require([
+            "esri/Map",
+            "esri/views/SceneView",
+            "esri/config",
+            "esri/layers/FeatureLayer",
+            "esri/widgets/Legend",
+            "esri/widgets/LayerList",
+            "esri/widgets/Expand",
+            "esri/geometry/Extent",
+            "esri/geometry/Point",
+            "esri/core/reactiveUtils",
+            "esri/widgets/DirectLineMeasurement3D"
+        ], function(Map, SceneView, esriConfig, FeatureLayer, Legend, LayerList, Expand, Extent, Point, reactiveUtils, DirectLineMeasurement3D) {
+            esriConfig.apiKey = "AAPK88646347a11d4ca190ec0b00201dc26c8kkfPaCG_kMmrxHsdUiVFuQzgCpecnrd664al4gHRq3VIIKlSV1epDVbEdh7tNJG";
+
+            const colors = ["#fc3e5aff", "#fce138ff", "#4c81cdff", "#f1983cff", "#48885cff", "#a553b7ff", "#fff799ff", "#b1a9d0ff", "#6ecffcff", "#fc6f84ff", "#6af689ff", "#fcd27eff"];
+
+            // Compute all coordinates from data and contextData
+            let allCoordinates = [];
+
+            data.features.forEach(feature => {
+                allCoordinates = allCoordinates.concat(feature.geometry.coordinates[0]);
+            });
+
+            if (contextData && contextData.features && contextData.features.length > 0) {
+                contextData.features.forEach(feature => {
+                    allCoordinates = allCoordinates.concat(feature.geometry.coordinates[0]);
+                });
+            }
+
+            // Compute the extent based on all coordinates
+            const extent = new Extent({
+                xmin: Math.min(...allCoordinates.map(coords => coords[0])),
+                ymin: Math.min(...allCoordinates.map(coords => coords[1])),
+                xmax: Math.max(...allCoordinates.map(coords => coords[0])),
+                ymax: Math.max(...allCoordinates.map(coords => coords[1])),
+                spatialReference: { wkid: 4326 }
+            });
+
+            // Expand the extent to zoom out a bit further
+            const expandedExtent = extent.expand(1.5);
+
+            // Compute center point of the expanded extent
+            const centerX = (expandedExtent.xmin + expandedExtent.xmax) / 2;
+            const centerY = (expandedExtent.ymin + expandedExtent.ymax) / 2;
+
+            // Estimate an appropriate altitude (z-value) based on extent size
+            const extentWidth = expandedExtent.xmax - expandedExtent.xmin;
+            const extentHeight = expandedExtent.ymax - expandedExtent.ymin;
+            const extentSize = Math.max(extentWidth, extentHeight);
+            const z = extentSize * 111000; // Approximate conversion from degrees to meters
+
+            // Create initial camera with bird's eye view
+            const initialCamera = {
+                position: {
+                    x: centerX,
+                    y: centerY,
+                    z: z // Adjusted altitude based on extent size
+                },
+                tilt: 45, // Bird's eye view angle
+                heading: 180 // Adjusted heading to face south
+            };
+
+            const map = new Map({
+                basemap: "arcgis/topographic",
+                ground: "world-elevation"
+            });
+
+            const view = new SceneView({
+                container: "viewDiv",
+                map: map,
+                camera: initialCamera, // Set the initial camera view
+                environment: {
+                    lighting: {
+                        directShadowsEnabled: true
+                    }
+                }
+            });
+
+            // Measurement widget instance (initially not added to the UI)
+            let measurementWidget = null;
+
+            // Create a custom button with an Esri icon for the measurement tool
+            const measureButton = document.createElement("div");
+            measureButton.classList.add("esri-icon-measure-line", "esri-widget--button", "esri-widget", "esri-interactive");
+            measureButton.title = "Measure Distance";
+
+            // Add the button to the top-left corner of the view
+            view.ui.add(measureButton, "top-left");
+
+            // Toggle measurement tool when the button is clicked
+            let measurementActive = false;
+            measureButton.addEventListener("click", function() {
+                if (!measurementActive) {
+                    // Activate measurement tool
+                    measurementWidget = new DirectLineMeasurement3D({
+                        view: view
+                    });
+                    view.ui.add(measurementWidget, "top-left");
+                    measurementActive = true;
+                    measureButton.classList.add("active-button"); // Optional: Highlight the button
+                } else {
+                    // Deactivate measurement tool
+                    measurementWidget.viewModel.clear();
+                    view.ui.remove(measurementWidget);
+                    measurementWidget.destroy();
+                    measurementWidget = null;
+                    measurementActive = false;
+                    measureButton.classList.remove("active-button"); // Optional: Remove highlight
+                }
+            });
+
+            const legend = new Legend({
+                view: view
+            });
+
+            const layerList = new LayerList({
+                view: view
+            });
+
+            const legendExpand = new Expand({
+                view: view,
+                content: legend,
+                expandIconClass: "esri-icon-layer-list",
+                group: "top-right"
+            });
+
+            const layerListExpand = new Expand({
+                view: view,
+                content: layerList,
+                expandIconClass: "esri-icon-layers",
+                group: "top-right"
+            });
+
+            const pickerContainer = document.getElementById("pickerContainer");
+
+            const pickerExpand = new Expand({
+                view: view,
+                content: pickerContainer,
+                expandIconClass: "esri-icon-filter",
+                group: "top-right"
+            });
+
+            view.ui.add([legendExpand, layerListExpand, pickerExpand], "top-right");
+
+            view.when(function() {
+                const featurePicker = document.getElementById("featurePicker");
+                const propertyNames = Object.keys(data.features[0].properties);
+
+                propertyNames.forEach(prop => {
+                    const item = document.createElement("calcite-combobox-item");
+                    item.value = prop;
+                    item.setAttribute('text-label', prop);
+                    item.innerHTML = prop;
+                    featurePicker.appendChild(item);
+                });
+
+                featurePicker.addEventListener("calciteComboboxChange", event => {
+                    const selectedProperty = event.target.selectedItems[0]?.value;
+                    if (!selectedProperty) return;
+
+                    let features = data.features.map((feature, index) => {
+                        return {
+                            geometry: {
+                                type: "polygon",
+                                rings: feature.geometry.coordinates,
+                                spatialReference: { wkid: 4326 }
+                            },
+                            attributes: {
+                                ObjectID: index,
+                                featureProp: feature.properties[selectedProperty],
+                                ...feature.properties
+                            }
+                        };
+                    });
+
+                    let contextFeatures = contextData.features.map((feature, index) => {
+                        return {
+                            geometry: {
+                                type: "polygon",
+                                rings: feature.geometry.coordinates,
+                                spatialReference: { wkid: 4326 }
+                            },
+                            attributes: {
+                                ObjectID: index + features.length,
+                                featureProp: feature.properties[selectedProperty],
+                                ...feature.properties
+                            }
+                        };
+                    });
+
+                    const uniqueValues = [...new Set(features.map(f => f.attributes.featureProp))];
+
+                    // Clear the map layers before adding new ones
+                    map.layers.removeAll();
+
+                    const sublayers = uniqueValues.map((value, index) => {
+                        const sublayerFeatures = features.filter(f => f.attributes.featureProp === value);
+
+                        return new FeatureLayer({
+                            source: sublayerFeatures,
+                            objectIdField: "ObjectID",
+                            title: value,
+                            fields: [
+                                { name: "ObjectID", alias: "ObjectID", type: "oid" },
+                                { name: "featureProp", alias: "featureProp", type: "string" },
+                                ...Object.keys(data.features[0].properties).map(prop => ({
+                                    name: prop,
+                                    alias: prop,
+                                    type: "string"
+                                }))
+                            ],
+                            renderer: {
+                                type: "simple",
+                                symbol: {
+                                    type: "polygon-3d",
+                                    symbolLayers: [{
+                                        type: "fill",
+                                        material: { color: colors[index % colors.length] },
+                                        outline: {
+                                            color: [255, 255, 255, 0.7],
+                                            size: "2px"
+                                        }
+                                    }]
+                                }
+                            },
+                            popupTemplate: {
+                                title: `{${selectedProperty}}`,
+                                content: [{
+                                    type: "fields",
+                                    fieldInfos: Object.keys(data.features[0].properties).map(prop => ({
+                                        fieldName: prop,
+                                        label: prop
+                                    }))
+                                }]
+                            }
+                        });
+                    });
+
+                    const contextLayer = new FeatureLayer({
+                        source: contextFeatures,
+                        objectIdField: "ObjectID",
+                        title: "Context Layer",
+                        fields: [
+                            { name: "ObjectID", alias: "ObjectID", type: "oid" },
+                            { name: "featureProp", alias: "featureProp", type: "string" },
+                            ...Object.keys(contextData.features[0]?.properties || {}).map(prop => ({
+                                name: prop,
+                                alias: prop,
+                                type: "string"
+                            }))
+                        ],
+                        renderer: {
+                            type: "simple",
+                            symbol: {
+                                type: "polygon-3d",
+                                symbolLayers: [{
+                                    type: "fill",
+                                    material: { color: [128, 128, 128, 0.5] },
+                                    outline: {
+                                        color: [255, 255, 255, 0.7],
+                                        size: "2px"
+                                    }
+                                }]
+                            },
+                            popupTemplate: {
+                                title: `{${selectedProperty}}`,
+                                content: [{
+                                    type: "fields",
+                                    fieldInfos: Object.keys(contextData.features[0]?.properties || {}).map(prop => ({
+                                        fieldName: prop,
+                                        label: prop
+                                    }))
+                                }]
+                            }
+                        }
+                    });
+
+                    // Add the context layer and sublayers to the map
+                    map.add(contextLayer);
+                    sublayers.forEach(layer => map.add(layer));
+
+                    // Animate the view to the expanded extent with a bird's eye view
+                    view.goTo({
+                        target: expandedExtent,
+                        tilt: 45, // Adjust tilt for bird's eye view
+                        heading: 180 // Ensure the view is facing south
+                    }, {
+                        duration: 1000, // Adjust duration as needed
+                        easing: "ease-in-out"
+                    });
+                });
+
+                // Trigger an initial change to load the default property
+                const initialProperty = propertyNames[0];
+                featurePicker.value = initialProperty;
+                featurePicker.dispatchEvent(new Event("calciteComboboxChange"));
+            });
+
+            view.on("click", function(event) {
+                view.hitTest(event).then(function(response) {
+                    const results = response.results.filter(function(result) {
+                        return result.graphic.layer.type === "feature";
+                    });
+                    if (results.length > 0) {
+                        const graphic = results[0].graphic;
+                        view.popup.open({
+                            location: event.mapPoint,
+                            features: [graphic]
+                        });
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>
