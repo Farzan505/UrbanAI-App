@@ -149,9 +149,9 @@ const initializeArcGIS = async () => {
         view: mapView.value,
         content: pickerContainer,
         expandIconClass: "esri-icon-filter",
-        group: "top-left"
+        group: "top-right"
       })
-      mapView.value.ui.add(pickerExpand, "top-left")
+      mapView.value.ui.add(pickerExpand, "top-right")
     }
 
     console.log('Updating initial map layers...')

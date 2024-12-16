@@ -201,28 +201,9 @@ export function useArcGISMap() {
         group: "top-left"
       })
 
-      // Add layer list
-      const layerList = new LayerList({
-        view: mapView.value,
-        listItemCreatedFunction: (event: any) => {
-          const item = event.item
-          if (item.layer.type === "group") {
-            item.panel = {
-              content: "legend",
-              open: true
-            }
-          }
-        }
-      })
 
-      const layerListExpand = new Expand({
-        view: mapView.value,
-        content: layerList,
-        expandIconClass: "esri-icon-layer-list",
-        group: "top-left"
-      })
 
-      mapView.value.ui.add([legendExpand, layerListExpand], "top-left")
+      mapView.value.ui.add([legendExpand], "top-left")
 
       // Wait for view to be ready
       await mapView.value.when()
