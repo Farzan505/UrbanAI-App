@@ -57,23 +57,6 @@
           {{ column }}
         </calcite-combobox-item>
       </calcite-combobox>
-
-      <calcite-label>Statistics</calcite-label>
-      <calcite-chart
-        id="statsChart"
-        type="pie"
-        height-scale="m"
-        width-scale="m"
-        :data="chartData"
-        :config="{
-          margins: { top: 10, right: 10, bottom: 10, left: 10 },
-          colors: [
-            '#fc3e5aff', '#fce138ff', '#4c81cdff', '#f1983cff', '#48885cff', 
-            '#a553b7ff', '#fff799ff', '#b1a9d0ff', '#6ecffcff', '#fc6f84ff', 
-            '#6af689ff', '#fcd27eff'
-          ]
-        }"
-      />
     </div>
   </calcite-panel>
 </template>
@@ -101,28 +84,6 @@ const props = withDefaults(defineProps<Props>(), {
   colorProperty: () => []
 })
 const emit = defineEmits<Emits>()
-
-const chartData = computed(() => {
-  if (!props.mapData?.features || !props.selectedFeature[0]) return []
-
-  const featureProperty = props.selectedFeature[0]
-  const features = props.selectedValues.length > 0 
-    ? props.mapData.features.filter(feature => 
-        props.selectedValues.includes(String(feature.properties[featureProperty]))
-      )
-    : props.mapData.features
-
-  const valueCounts = features.reduce((acc: Record<string, number>, feature: Feature) => {
-    const value = String(feature.properties[featureProperty])
-    acc[value] = (acc[value] || 0) + 1
-    return acc
-  }, {})
-
-  return Object.entries(valueCounts).map(([value, count]) => ({
-    name: value,
-    value: count
-  }))
-})
 
 const onFeatureChange = (event: any) => {
   console.log('MapUI: Feature picker change event:', event.target.selectedItems)

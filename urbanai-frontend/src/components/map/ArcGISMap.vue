@@ -1,28 +1,36 @@
 <template>
-  <Card class="w-full h-full">
-    <CardHeader class="py-2 border-b">
-      <CardTitle class="text-lg">Karte</CardTitle>
-      <div v-if="error" class="text-red-500 text-sm">{{ error }}</div>
-    </CardHeader>
-    <CardContent class="p-0 h-[calc(100%-3.5rem)]">
-      <div v-if="loading" class="w-full h-full">
-        <Skeleton class="h-full w-full shadow-none" />
-      </div>
-      <div v-else ref="mapContainer" id="viewDiv" class="w-full h-full">
-        <MapUI
-          :available-columns="availableColumns"
-          :unique-values="uniqueValues"
-          :selected-feature="selectedFeature"
-          :selected-values="selectedValues"
-          :color-property="colorProperty"
-          :map-data="mapData"
-          @update:selected-feature="onFeatureChange"
-          @update:selected-values="onValueChange"
-          @update:color-property="onColorChange"
-        />
-      </div>
-    </CardContent>
-  </Card>
+  <div class="flex flex-col gap-4">
+    <Card class="w-full">
+      <CardHeader class="py-2 border-b">
+        <CardTitle class="text-lg">Karte</CardTitle>
+        <div v-if="error" class="text-red-500 text-sm">{{ error }}</div>
+      </CardHeader>
+      <CardContent class="p-0 h-[500px]">
+        <div v-if="loading" class="w-full h-full">
+          <Skeleton class="h-full w-full shadow-none" />
+        </div>
+        <div v-else ref="mapContainer" id="viewDiv" class="w-full h-full">
+          <MapUI
+            :available-columns="availableColumns"
+            :unique-values="uniqueValues"
+            :selected-feature="selectedFeature"
+            :selected-values="selectedValues"
+            :color-property="colorProperty"
+            :map-data="mapData"
+            @update:selected-feature="onFeatureChange"
+            @update:selected-values="onValueChange"
+            @update:color-property="onColorChange"
+          />
+        </div>
+      </CardContent>
+    </Card>
+
+    <!-- Chart Panel below map -->
+    <ChartPanel
+      :color-property="colorProperty"
+      :filtered-features="filteredFeatures"
+    />
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -30,6 +38,7 @@ import { onMounted, ref, watch, computed, nextTick, onUnmounted } from 'vue'
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/card'
 import { Skeleton } from '../ui/skeleton'
 import MapUI from './MapUI.vue'
+import ChartPanel from './ChartPanel.vue'
 import { useMapData } from '../../composables/useMapData'
 import { useArcGISMap } from '../../composables/useArcGISMap'
 import { useMapLayers } from '../../composables/useMapLayers'

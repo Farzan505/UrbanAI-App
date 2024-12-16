@@ -1,52 +1,49 @@
 <template>
-  <div class="w-full p-4 bg-background" style="height: 100%;">
-    <div class="flex items-center justify-between mb-2">
-      <h3 class="text-lg font-semibold">Category Distribution</h3>
+  <Card class="w-full">
+    <CardHeader class="py-2 border-b">
+      <CardTitle class="text-lg">Category Distribution</CardTitle>
       <div class="text-sm text-muted-foreground">
-        {{ colorByProperty ? `Distribution for: ${colorByProperty}` : 'Select a property for visualization' }}
+        {{ colorProperty[0] ? `Distribution for: ${colorProperty[0]}` : 'Select a property for visualization' }}
       </div>
-    </div>
-    <div ref="chartContainer" class="h-[calc(100%-2.5rem)]">
-      <calcite-chart
-        v-if="chartData.length > 0"
-        ref="statsChart"
-        type="pie"
-        height-scale="l"
-        width-scale="l"
-        :data="chartData"
-        :config="{
-          margins: { top: 20, right: 20, bottom: 40, left: 40 },
-          colors: chartColors
-        }"
-      />
-      <div 
-        v-else-if="!chartData.length && colorByProperty" 
-        class="flex items-center justify-center h-full text-muted-foreground"
-      >
-        No data available for the selected property
+    </CardHeader>
+    <CardContent class="p-4">
+      <div ref="chartContainer" class="h-[300px]">
+        <calcite-chart
+          v-if="chartData.length > 0"
+          ref="statsChart"
+          type="pie"
+          height-scale="l"
+          width-scale="l"
+          :data="chartData"
+          :config="{
+            margins: { top: 20, right: 20, bottom: 40, left: 40 },
+            colors: chartColors
+          }"
+        />
+        <div 
+          v-else-if="!chartData.length && colorProperty[0]" 
+          class="flex items-center justify-center h-full text-muted-foreground"
+        >
+          No data available for the selected property
+        </div>
+        <div 
+          v-else 
+          class="flex items-center justify-center h-full text-muted-foreground"
+        >
+          Select a property to view distribution
+        </div>
       </div>
-      <div 
-        v-else 
-        class="flex items-center justify-center h-full text-muted-foreground"
-      >
-        Select a property to view distribution
-      </div>
-    </div>
-  </div>
+    </CardContent>
+  </Card>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
-
-interface Feature {
-  id: string
-  type: "Feature"
-  properties: Record<string, any>
-  geometry: any
-}
+import { Card, CardHeader, CardTitle, CardContent } from '../ui/card'
+import type { Feature } from '../../types/map'
 
 interface Props {
-  colorByProperty: string
+  colorProperty: string[]
   filteredFeatures: Feature[]
 }
 
@@ -54,22 +51,29 @@ const props = defineProps<Props>()
 const chartContainer = ref<HTMLElement | null>(null)
 const statsChart = ref<any>(null)
 
-// Chart colors with transparency
-const CHART_COLORS = [
-  '#fc3e5aff', '#fce138ff', '#4c81cdff', '#f1983cff', '#48885cff', 
-  '#a553b7ff', '#fff799ff', '#b1a9d0ff', '#6ecffcff', '#fc6f84ff', 
-  '#6af689ff', '#fcd27eff'
+// Use the same colors as the map layers
+const MAP_COLORS = [
+  "#fc3e5aff", "#fce138ff", "#4c81cdff", "#f1983cff", "#48885cff",
+  "#a553b7ff", "#fff799ff", "#b1a9d0ff", "#6ecffcff", "#fc6f84ff",
+  "#6af689ff", "#fcd27eff"
 ]
 
 const chartColors = computed(() => {
-  return CHART_COLORS.map(color => color.replace(/ff$/, 'cc'))
+  if (!chartData.value.length) return []
+  
+  // Create a color map for unique values
+  const uniqueValues = chartData.value.map(item => item.name)
+  return uniqueValues.map((_, index) => {
+    const color = MAP_COLORS[index % MAP_COLORS.length]
+    return color.replace(/ff$/, 'cc') // Match map transparency
+  })
 })
 
 const chartData = computed(() => {
-  if (!props.filteredFeatures.length || !props.colorByProperty) return []
+  if (!props.filteredFeatures.length || !props.colorProperty[0]) return []
 
   const valueCounts = props.filteredFeatures.reduce((acc: Record<string, number>, feature: Feature) => {
-    const value = String(feature.properties[props.colorByProperty])
+    const value = String(feature.properties[props.colorProperty[0]])
     acc[value] = (acc[value] || 0) + 1
     return acc
   }, {})
@@ -90,7 +94,7 @@ function updateChartSize() {
 }
 
 // Watch for changes in filtered features or color property
-watch([() => props.filteredFeatures, () => props.colorByProperty], () => {
+watch([() => props.filteredFeatures, () => props.colorProperty], () => {
   if (statsChart.value && chartData.value.length > 0) {
     // Update chart data
     const chart = statsChart.value as any
