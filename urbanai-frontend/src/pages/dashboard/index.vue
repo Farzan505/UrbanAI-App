@@ -181,71 +181,10 @@ watch(mapData, () => {
             />
           </CardContent>
         </Card>
-        
-        <!-- Data Table Card -->
-        <Card>
-          <CardHeader>
-            <CardTitle>Data Table</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <DataTable 
-              v-if="mapData"
-              :data="mapData.features"
-              :columns="columns"
-              @update:filteredData="handleFilteredData"
-            />
-            <template v-else>
-              <div class="flex flex-col space-y-3">
-                <Skeleton class="h-[125px] w-full rounded-xl" />
-                <div class="space-y-2">
-                  <Skeleton class="h-4 w-[250px]" />
-                  <Skeleton class="h-4 w-[200px]" />
-                </div>
-              </div>
-            </template>
-          </CardContent>
-        </Card>
 
-        <!-- Bar Chart Card -->
-        <Card>
-          <CardHeader>
-            <CardTitle>Data Visualization</CardTitle>
-          </CardHeader>
-          <CardContent class="h-[400px]">
-            <DataBarChart
-              v-if="mapData"
-              :data="barChartData"
-              :columns="columnNames"
-              v-model:selectedColumn="selectedColumn"
-              :loading="chartLoading"
-            />
-            <template v-else>
-              <div class="flex flex-col space-y-3">
-                <Skeleton class="h-[125px] w-full rounded-xl" />
-                <div class="space-y-2">
-                  <Skeleton class="h-4 w-[250px]" />
-                  <Skeleton class="h-4 w-[200px]" />
-                </div>
-              </div>
-            </template>
-          </CardContent>
-        </Card>
       </div>
 
-      <!-- Analytics Tab -->
-      <div v-if="activeTab === 1">
-        <Card>
-          <CardHeader>
-            <CardTitle>Import/Export Growth Rates</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <GrowthRateChart
-              :data="growthData"
-              class="h-[calc(100vh-24rem)] w-full"
-            />
-          </CardContent>
-        </Card>
-      </div>
+
     </div>
   </div>
 </template>
