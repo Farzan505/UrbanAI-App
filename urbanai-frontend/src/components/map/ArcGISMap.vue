@@ -1,40 +1,53 @@
-<!-- Previous template, imports, interfaces, and state management remain unchanged -->
 <template>
   <Card class="w-full h-full">
     <CardHeader class="py-2 border-b">
       <CardTitle class="text-lg">Karte</CardTitle>
       <div v-if="error" class="text-red-500 text-sm">{{ error }}</div>
     </CardHeader>
-    <CardContent class="p-0 h-[calc(100%-3.5rem)]">
+    <CardContent class="p-0 flex flex-col h-[calc(100%-3.5rem)]">
       <div v-if="loading" class="w-full h-full">
         <Skeleton class="h-full w-full shadow-none" />
       </div>
-      <div v-else ref="mapContainer" id="viewDiv" class="w-full h-full">
-        <calcite-panel id="pickerContainer" heading="Filter Features" width-scale="l" height-scale="l">
-          <div class="panel-content">
-            <calcite-label>Select Property</calcite-label>
-            <calcite-combobox id="featurePicker" placeholder="Pick a Feature Property" selection-mode="single"  overlay-positioning="fixed">
-            </calcite-combobox>
-            
-            <calcite-label>Select Values</calcite-label>
-            <calcite-combobox id="valuePicker" placeholder="Select Values" selection-mode="multiple"  overlay-positioning="fixed">
-            </calcite-combobox>
+      <div v-else class="flex flex-col h-full">
+        <!-- Map Container -->
+        <div ref="mapContainer" id="viewDiv" class="w-full" style="height: 70%;">
+          <calcite-panel id="pickerContainer" heading="Filter Features" width-scale="l" height-scale="l">
+            <div class="panel-content">
+              <calcite-label>Filter Property</calcite-label>
+              <calcite-combobox id="featurePicker" placeholder="Pick a Feature Property" selection-mode="single" overlay-positioning="fixed">
+              </calcite-combobox>
+              
+              <calcite-label>Filter Values</calcite-label>
+              <calcite-combobox id="valuePicker" placeholder="Select Values" selection-mode="multiple" overlay-positioning="fixed">
+              </calcite-combobox>
 
-            <calcite-label>Statistics</calcite-label>
-            <calcite-chart id="statsChart"
-              type="pie"
-              height-scale="m"
-              width-scale="m"
-              :data="chartData"
-              :config="{
-                margins: { top: 10, right: 10, bottom: 10, left: 10 },
-                colors: ['#fc3e5aff', '#fce138ff', '#4c81cdff', '#f1983cff', '#48885cff', 
-                        '#a553b7ff', '#fff799ff', '#b1a9d0ff', '#6ecffcff', '#fc6f84ff', 
-                        '#6af689ff', '#fcd27eff']
-              }">
-            </calcite-chart>
+              <calcite-label>Color By Property</calcite-label>
+              <calcite-combobox id="colorPicker" placeholder="Select Property for Colors" selection-mode="single" overlay-positioning="fixed">
+              </calcite-combobox>
+            </div>
+          </calcite-panel>
+        </div>
+
+        <!-- Chart Section -->
+        <div class="w-full p-4 bg-background" style="height: 30%;">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-lg font-semibold">Category Distribution</h3>
+            <div class="text-sm text-muted-foreground">
+              {{ colorByProperty ? `Distribution for: ${colorByProperty}` : 'Select a property for visualization' }}
+            </div>
           </div>
-        </calcite-panel>
+          <calcite-chart
+            id="statsChart"
+            type="pie"
+            height-scale="l"
+            width-scale="l"
+            :data="chartData"
+            :config="{
+              margins: { top: 20, right: 20, bottom: 40, left: 40 },
+              colors: chartColors
+            }">
+          </calcite-chart>
+        </div>
       </div>
     </CardContent>
   </Card>
@@ -74,6 +87,11 @@ declare function require(
 // Constants
 const ARCGIS_API_KEY = import.meta.env.VITE_ARCGIS_API
 const ZOOM_THRESHOLD = 14  // Threshold for switching between detailed and overview views
+const CHART_COLORS = [
+  '#fc3e5aff', '#fce138ff', '#4c81cdff', '#f1983cff', '#48885cff', 
+  '#a553b7ff', '#fff799ff', '#b1a9d0ff', '#6ecffcff', '#fc6f84ff', 
+  '#6af689ff', '#fcd27eff'
+]
 
 // State
 const mapContainer = ref<HTMLElement | null>(null)
@@ -82,6 +100,7 @@ const map = shallowRef<any>(null)
 const groupLayer = shallowRef<any>(null)
 const selectedFeature = ref<string[]>([])
 const selectedValues = ref<string[]>([])
+const colorByProperty = ref<string>('')
 const availableColumns = ref<string[]>([])
 const uniqueValues = ref<string[]>([])
 const error = ref<string | null>(null)
@@ -105,13 +124,12 @@ const currentBasemap = computed(() => {
 
 // Computed properties
 const chartData = computed(() => {
-  if (!mapData.value?.features || !selectedFeature.value[0]) return []
+  if (!mapData.value?.features || !colorByProperty.value) return []
 
-  const featureProperty = selectedFeature.value[0]
   const features = selectedValues.value.length > 0 ? filteredFeatures.value : mapData.value.features
 
   const valueCounts = features.reduce((acc: Record<string, number>, feature: Feature) => {
-    const value = String(feature.properties[featureProperty])
+    const value = String(feature.properties[colorByProperty.value])
     acc[value] = (acc[value] || 0) + 1
     return acc
   }, {})
@@ -119,7 +137,11 @@ const chartData = computed(() => {
   return Object.entries(valueCounts).map(([value, count]) => ({
     name: value,
     value: count
-  }))
+  })).sort((a, b) => b.value - a.value) // Sort by count descending
+})
+
+const chartColors = computed(() => {
+  return CHART_COLORS.map(color => color.replace(/ff$/, 'cc'))
 })
 
 const filteredFeatures = computed(() => {
@@ -188,7 +210,7 @@ function loadArcGISModules(): Promise<void> {
 }
 
 function updateUniqueValues() {
-  if (!mapData.value?.features) return
+  if (!mapData.value?.features || !selectedFeature.value[0]) return
 
   uniqueValues.value = [...new Set(mapData.value.features.map(
     feature => String(feature.properties[selectedFeature.value[0]])
@@ -208,7 +230,7 @@ function updateUniqueValues() {
 }
 
 async function updateMapLayers() {
-  if (!mapData.value?.features || !groupLayer.value) return
+  if (!mapData.value?.features || !groupLayer.value || !colorByProperty.value) return
 
   const modules = (window as any).arcgisModules
   if (!modules) return
@@ -229,23 +251,20 @@ async function updateMapLayers() {
 
     // Extract unique values for coloring
     const values = [...new Set(filteredData.features.map(
-      (feature: Feature) => feature.properties[selectedFeature.value[0]]
+      (feature: Feature) => feature.properties[colorByProperty.value]
     ))]
     
     // Generate color map
-    const colors = ["#fc3e5aff", "#fce138ff", "#4c81cdff", "#f1983cff", "#48885cff", 
-                   "#a553b7ff", "#fff799ff", "#b1a9d0ff", "#6ecffcff", "#fc6f84ff", 
-                   "#6af689ff", "#fcd27eff"]
     const colorMap: Record<string, string> = {}
     values.forEach((value, index) => {
-      const color = colors[index % colors.length]
+      const color = CHART_COLORS[index % CHART_COLORS.length]
       const rgbaColor = color.replace(/ff$/, 'cc')
       colorMap[String(value)] = rgbaColor
     })
 
     // Create renderers with enhanced styling
     const fillRenderer = new UniqueValueRenderer({
-      field: selectedFeature.value[0],
+      field: colorByProperty.value,
       uniqueValueInfos: values.map(value => ({
         value: value,
         symbol: new SimpleFillSymbol({
@@ -260,7 +279,7 @@ async function updateMapLayers() {
     })
 
     const pointRenderer = new UniqueValueRenderer({
-      field: selectedFeature.value[0],
+      field: colorByProperty.value,
       uniqueValueInfos: values.map(value => ({
         value: value,
         symbol: new SimpleMarkerSymbol({
@@ -341,7 +360,7 @@ async function updateMapLayers() {
       if (legend) {
         legend.layerInfos = [{
           layer: groupLayer.value,
-          title: selectedFeature.value[0]
+          title: colorByProperty.value
         }]
       }
     }
@@ -447,7 +466,7 @@ async function initializeMap() {
         view: mapView.value,
         layerInfos: [{
           layer: groupLayer.value,
-          title: selectedFeature.value[0]
+          title: colorByProperty.value
         }]
       })
 
@@ -511,9 +530,33 @@ async function initializeMap() {
             updateMapLayers()
           }
         })
+      }
 
-        // Set initial value
-        featurePicker.value = selectedFeature.value[0]
+      // Initialize color picker
+      const colorPicker = document.getElementById("colorPicker") as CalciteCombobox
+      if (colorPicker && data.features.length > 0) {
+        const propertyNames = Object.keys(data.features[0].properties)
+        propertyNames.forEach(prop => {
+          const item = document.createElement("calcite-combobox-item") as CalciteComboboxItem
+          item.value = prop
+          item.setAttribute('text-label', prop)
+          item.innerHTML = prop
+          colorPicker.appendChild(item)
+        })
+
+        colorPicker.addEventListener("calciteComboboxChange", (event: any) => {
+          const selectedProp = event.target.selectedItems[0]?.value
+          if (selectedProp) {
+            colorByProperty.value = selectedProp
+            updateMapLayers()
+          }
+        })
+
+        // Set initial color property
+        if (!colorByProperty.value && selectedFeature.value[0]) {
+          colorByProperty.value = selectedFeature.value[0]
+          colorPicker.value = colorByProperty.value
+        }
       }
 
       // Initialize value picker
@@ -588,10 +631,17 @@ async function initializeArcGIS() {
 watch(selectedFeature, () => {
   updateUniqueValues()
   selectedValues.value = []
+  if (!colorByProperty.value) {
+    colorByProperty.value = selectedFeature.value[0]
+    const colorPicker = document.getElementById("colorPicker") as CalciteCombobox
+    if (colorPicker) {
+      colorPicker.value = colorByProperty.value
+    }
+  }
   updateMapLayers()
 })
 
-watch(selectedValues, () => {
+watch([selectedValues, colorByProperty], () => {
   updateMapLayers()
 })
 
