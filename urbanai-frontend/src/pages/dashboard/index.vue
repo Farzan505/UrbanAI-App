@@ -10,6 +10,7 @@ import { colorMode } from '../../composables/useTheme'
 import { useMapData } from '../../composables/useMapData'
 import { createColumns } from '../../components/columns'
 import Skeleton from '../../components/ui/skeleton/Skeleton.vue'
+import type { Feature } from '../../types/map'
 
 interface GeoJSONFeature {
   id: string
@@ -38,8 +39,10 @@ provide('colorMode', colorMode)
 
 // Store filtered data for table and chart separately from map
 const filteredTableData = ref<GeoJSONFeature[]>([])
-const selectedColumn = ref('')
 const chartLoading = ref(true)
+const selectedMapValues = ref<string[]>([])
+const colorProperty = ref<string[]>([])
+const filteredFeatures = ref<Feature[]>([])
 
 // Sample growth rate data
 const growthData = ref([
@@ -72,31 +75,6 @@ const columns = computed(() => {
   return createColumns(mapData.value.features)
 })
 
-// Get column names for bar chart
-const columnNames = computed(() => {
-  if (!mapData.value?.features?.[0]) return []
-  return Object.keys(mapData.value.features[0].properties)
-})
-
-// Initialize selected column with first available column
-watch(columnNames, (newNames) => {
-  if (newNames.length > 0 && !selectedColumn.value) {
-    selectedColumn.value = newNames[0]
-  }
-}, { immediate: true })
-
-// Prepare data for bar chart
-const barChartData = computed(() => {
-  const features = filteredTableData.value.length > 0 
-    ? filteredTableData.value 
-    : (mapData.value?.features || [])
-  
-  return features.map(feature => ({
-    id: feature.id,
-    ...feature.properties
-  }))
-})
-
 onMounted(async () => {
   // Check if user is authenticated
   const token = localStorage.getItem('token')
@@ -123,6 +101,21 @@ function handleFilteredData(data: GeoJSONFeature[]) {
   filteredTableData.value = data
 }
 
+// Handle map value selection updates
+function handleMapValuesUpdate(values: string[]) {
+  selectedMapValues.value = values
+}
+
+// Handle filtered features updates from map
+function handleFilteredFeatures(features: Feature[]) {
+  filteredFeatures.value = features
+}
+
+// Handle color property updates from map
+function handleColorPropertyUpdate(property: string[]) {
+  colorProperty.value = property
+}
+
 // Watch for map data changes and reset filtered data when map data changes
 watch(mapData, () => {
   filteredTableData.value = []
@@ -130,7 +123,7 @@ watch(mapData, () => {
 </script>
 
 <template>
-  <div class="hidden h-full flex-1 flex-col space-y-8 p-8 md:flex">
+  <div class="h-full flex-1 flex-col p-4 md:p-8 md:flex">
     <div class="flex items-center justify-between space-y-2">
       <div>
         <h2 class="text-2xl font-bold tracking-tight">Dashboard</h2>
@@ -140,7 +133,7 @@ watch(mapData, () => {
       </div>
     </div>
 
-    <div class="flex-1 space-y-8">
+    <div class="flex-1 space-y-4 md:space-y-8 mt-4 md:mt-8">
       <div class="border-b border-gray-200">
         <nav class="flex space-x-8" aria-label="Tabs">
           <button
@@ -160,31 +153,29 @@ watch(mapData, () => {
       </div>
 
       <!-- Map Tab -->
-      <div v-if="activeTab === 0" class="space-y-8">
-        <!-- Map Card -->
-        <Card class="h-[calc(100vh-12rem)]">
-          <CardContent class="p-0 h-full">
-            <template v-if="mapLoading">
-              <div class="flex items-center justify-center h-full">
-                <div class="flex flex-col space-y-3">
-                  <Skeleton class="h-[125px] w-[250px] rounded-xl" />
-                  <div class="space-y-2">
-                    <Skeleton class="h-4 w-[250px]" />
-                    <Skeleton class="h-4 w-[200px]" />
-                  </div>
+      <div v-if="activeTab === 0" class="space-y-4 md:space-y-8">
+        <!-- Map and Chart Row -->
+        <div class="w-full h-[calc(100vh-16rem)] lg:h-[calc(100vh-12rem)]">
+          <template v-if="mapLoading">
+            <div class="flex items-center justify-center h-full">
+              <div class="flex flex-col space-y-3">
+                <Skeleton class="h-[125px] w-[250px] rounded-xl" />
+                <div class="space-y-2">
+                  <Skeleton class="h-4 w-[250px]" />
+                  <Skeleton class="h-4 w-[200px]" />
                 </div>
               </div>
-            </template>
-            <ArcGISMap 
-              v-else-if="mapData"
-              :data="mapData" 
-            />
-          </CardContent>
-        </Card>
-
+            </div>
+          </template>
+          <ArcGISMap 
+            v-else-if="mapData"
+            :data="mapData"
+            @update:selected-values="handleMapValuesUpdate"
+            @update:filtered-features="handleFilteredFeatures"
+            @update:color-property="handleColorPropertyUpdate"
+          />
+        </div>
       </div>
-
-
     </div>
   </div>
 </template>
@@ -192,5 +183,11 @@ watch(mapData, () => {
 <style scoped>
 .space-y-8 > :not([hidden]) ~ :not([hidden]) {
   margin-top: 2rem;
+}
+
+@media (max-width: 1024px) {
+  .space-y-4 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 1rem;
+  }
 }
 </style>

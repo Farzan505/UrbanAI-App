@@ -25,10 +25,10 @@
       </CardContent>
     </Card>
 
-    <!-- Chart Panel below map -->
     <ChartPanel
       :color-property="colorProperty"
       :filtered-features="filteredFeatures"
+      :loading="loading"
     />
   </div>
 </template>

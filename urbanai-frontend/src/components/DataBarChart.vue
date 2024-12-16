@@ -8,18 +8,13 @@ import {
   Title,
   Tooltip,
   Legend,
-  ArcElement
+  ArcElement,
+  ChartData,
+  ChartOptions
 } from 'chart.js'
 import { computed, ref, onMounted, watch } from 'vue'
 import Skeleton from './ui/skeleton/Skeleton.vue'
-import { Button } from './ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from './ui/dropdown-menu'
-import { ChevronDown } from 'lucide-vue-next'
+import type { Feature } from '../types/map'
 
 ChartJS.register(
   CategoryScale,
@@ -31,35 +26,68 @@ ChartJS.register(
   Legend
 )
 
-interface DataPoint {
-  [key: string]: any
-}
-
-interface TooltipItem {
-  name: string
-  color: string
-  value: number | string
-}
+// Use the same colors as the map layers
+const MAP_COLORS = [
+  "#fc3e5aff", "#fce138ff", "#4c81cdff", "#f1983cff", "#48885cff",
+  "#a553b7ff", "#fff799ff", "#b1a9d0ff", "#6ecffcff", "#fc6f84ff",
+  "#6af689ff", "#fcd27eff"
+]
 
 const props = defineProps<{
-  data: Array<DataPoint>
-  columns: string[]
-  selectedColumn: string
+  filteredFeatures: Feature[]
+  colorProperty: string[]
   loading?: boolean
+  selectedValues?: string[]
 }>()
 
 const emit = defineEmits<{
-  'update:selectedColumn': [value: string]
+  'update:selectedValues': [value: string[]]
 }>()
 
 const isDarkMode = ref(false)
 const chartRef = ref<any>(null)
+const hiddenLegendItems = ref(new Set<string>())
+
+// Register the plugin globally
+ChartJS.register({
+  id: 'centerText',
+  beforeDraw: (chart: any) => {
+    if (chart.config.type !== 'doughnut') return
+
+    const { ctx, data } = chart
+    if (!data.datasets?.[0]?.data?.length) return
+
+    const total = data.datasets[0].data.reduce((sum: number, value: number) => sum + value, 0)
+    if (!total) return
+
+    const centerX = (chart.chartArea.left + chart.chartArea.right) / 2
+    const centerY = (chart.chartArea.top + chart.chartArea.bottom) / 2
+
+    // Save context state
+    ctx.save()
+    
+    // Configure text
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    
+    // Draw total number
+    ctx.font = 'bold 24px Inter'
+    ctx.fillStyle = isDarkMode.value ? '#e5e7eb' : '#374151'
+    ctx.fillText(total.toString(), centerX, centerY - 12)
+    
+    // Draw "Total" label
+    ctx.font = '14px Inter'
+    ctx.fillStyle = isDarkMode.value ? '#9ca3af' : '#6b7280'
+    ctx.fillText('Total', centerX, centerY + 12)
+    
+    // Restore context state
+    ctx.restore()
+  }
+})
 
 onMounted(() => {
-  // Initial check
   isDarkMode.value = document.documentElement.classList.contains('dark')
 
-  // Watch for theme changes
   const observer = new MutationObserver((mutations) => {
     mutations.forEach((mutation) => {
       if (mutation.attributeName === 'class') {
@@ -71,9 +99,28 @@ onMounted(() => {
   observer.observe(document.documentElement, {
     attributes: true
   })
+
+  if (chartRef.value?.chart) {
+    const chart = chartRef.value.chart
+    chart.options.plugins.legend.onClick = (e: any, legendItem: any) => {
+      const value = legendItem.text
+      if (hiddenLegendItems.value.has(value)) {
+        hiddenLegendItems.value.delete(value)
+      } else {
+        hiddenLegendItems.value.add(value)
+      }
+      
+      const visibleValues = Object.keys(aggregatedData.value)
+        .filter(key => !hiddenLegendItems.value.has(key))
+      
+      emit('update:selectedValues', visibleValues)
+      
+      chart.setDatasetVisibility(legendItem.datasetIndex, !chart.isDatasetVisible(legendItem.datasetIndex))
+      chart.update()
+    }
+  }
 })
 
-// Watch for theme changes and update chart
 watch(isDarkMode, (newValue) => {
   if (chartRef.value?.chart) {
     const textColor = newValue ? '#e5e7eb' : '#374151'
@@ -84,26 +131,52 @@ watch(isDarkMode, (newValue) => {
   }
 })
 
+watch(() => props.selectedValues, (newValues) => {
+  if (chartRef.value?.chart && newValues) {
+    const chart = chartRef.value.chart
+    hiddenLegendItems.value = new Set(
+      Object.keys(aggregatedData.value)
+        .filter(key => !newValues.includes(key))
+    )
+    chart.update()
+  }
+}, { deep: true })
+
 // Check if data is string type
 const isStringData = computed(() => {
-  if (!props.data.length) return false
-  const firstValue = props.data[0][props.selectedColumn]
+  if (!props.filteredFeatures.length || !props.colorProperty[0]) return false
+  const firstValue = props.filteredFeatures[0].properties[props.colorProperty[0]]
   return typeof firstValue === 'string'
+})
+
+// Prepare aggregated data
+const aggregatedData = computed(() => {
+  if (!isStringData.value || !props.colorProperty[0]) return {}
+
+  const data: Record<string, number> = {}
+  props.filteredFeatures.forEach(feature => {
+    const value = feature.properties[props.colorProperty[0]]
+    data[value] = (data[value] || 0) + 1
+  })
+  return data
 })
 
 // Prepare data for doughnut chart (aggregate string values)
 const doughnutChartData = computed(() => {
-  if (!isStringData.value) return null
+  if (!isStringData.value || !props.colorProperty[0]) return {
+    labels: [],
+    datasets: [{
+      data: [],
+      backgroundColor: [],
+      borderColor: isDarkMode.value ? 'rgb(17, 24, 39)' : 'white',
+      borderWidth: 2,
+      cutout: '60%'
+    }]
+  }
 
-  const aggregatedData: Record<string, number> = {}
-  props.data.forEach(item => {
-    const value = item[props.selectedColumn]
-    aggregatedData[value] = (aggregatedData[value] || 0) + 1
-  })
-
-  const labels = Object.keys(aggregatedData)
-  const data = Object.values(aggregatedData)
-  const colors = labels.map((_, i) => `hsl(${(i * 360) / labels.length}, 70%, 50%)`)
+  const labels = Object.keys(aggregatedData.value)
+  const data = Object.values(aggregatedData.value)
+  const colors = labels.map((_, i) => MAP_COLORS[i % MAP_COLORS.length].replace(/ff$/, 'cc'))
 
   return {
     labels,
@@ -119,51 +192,52 @@ const doughnutChartData = computed(() => {
 
 // Prepare data for bar chart (numeric values)
 const barChartData = computed(() => {
-  if (isStringData.value) return null
-
-  const labels = props.data.map((d, i) => d.year || d.id || i.toString())
-  
-  const datasets = [
-    {
-      label: props.selectedColumn,
-      data: props.data.map(d => d[props.selectedColumn]),
-      backgroundColor: 'rgb(75, 192, 192)',
-      borderColor: 'rgb(75, 192, 192)',
+  if (!props.colorProperty[0] || isStringData.value) return {
+    labels: [],
+    datasets: [{
+      label: props.colorProperty[0] || '',
+      data: [],
+      backgroundColor: MAP_COLORS[0].replace(/ff$/, 'cc'),
+      borderColor: MAP_COLORS[0],
       borderWidth: 1,
       borderRadius: 4,
-    }
-  ]
+    }]
+  }
 
+  const labels = props.filteredFeatures.map((f, i) => f.properties.year || f.properties.id || i.toString())
+  
   return {
     labels,
-    datasets
+    datasets: [{
+      label: props.colorProperty[0],
+      data: props.filteredFeatures.map(f => f.properties[props.colorProperty[0]]),
+      backgroundColor: MAP_COLORS[0].replace(/ff$/, 'cc'),
+      borderColor: MAP_COLORS[0],
+      borderWidth: 1,
+      borderRadius: 4,
+    }]
   }
 })
 
-// Handle column selection
-const handleColumnChange = (column: string) => {
-  emit('update:selectedColumn', column)
-}
-
 // Chart options
-const chartOptions = computed(() => ({
+const chartOptions = computed<ChartOptions<'bar' | 'doughnut'>>(() => ({
   responsive: true,
   maintainAspectRatio: false,
   interaction: {
     intersect: false,
-    mode: 'index'
+    mode: 'index' as const
   },
   layout: {
     padding: {
       top: 20,
       bottom: 20,
       left: 20,
-      right: isStringData.value ? 100 : 20 // Extra padding for legend when using doughnut
+      right: isStringData.value ? 100 : 20
     }
   },
   plugins: {
     legend: {
-      position: isStringData.value ? 'right' : 'top' as const,
+      position: isStringData.value ? 'right' as const : 'top' as const,
       labels: {
         usePointStyle: true,
         pointStyle: isStringData.value ? 'circle' : 'rect',
@@ -172,6 +246,9 @@ const chartOptions = computed(() => ({
         font: {
           size: 12,
           family: "'Inter', sans-serif"
+        },
+        filter: (legendItem: any) => {
+          return !hiddenLegendItems.value.has(legendItem.text)
         }
       }
     },
@@ -197,7 +274,7 @@ const chartOptions = computed(() => ({
         label: function(context: any) {
           const label = context.label || ''
           const value = context.raw
-          return isStringData.value ? `${label}: ${value} items` : `${props.selectedColumn}: ${value}`
+          return isStringData.value ? `${label}: ${value} items` : `${props.colorProperty[0]}: ${value}`
         }
       }
     }
@@ -235,26 +312,6 @@ const chartOptions = computed(() => ({
 
 <template>
   <div class="flex flex-col gap-4 h-full">
-    <div class="flex items-center gap-2">
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" class="h-8">
-            {{ selectedColumn }}
-            <ChevronDown class="ml-2 h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" class="w-[200px]">
-          <DropdownMenuItem 
-            v-for="column in columns" 
-            :key="column"
-            @click="handleColumnChange(column)"
-          >
-            {{ column }}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
-
     <!-- Loading State -->
     <div v-if="loading" class="flex-1 flex flex-col space-y-3">
       <Skeleton class="h-[125px] w-full rounded-xl" />
