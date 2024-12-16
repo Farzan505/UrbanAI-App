@@ -123,8 +123,9 @@ watch(mapData, () => {
 </script>
 
 <template>
-  <div class="h-full flex-1 flex-col p-4 md:p-8 md:flex">
-    <div class="flex items-center justify-between space-y-2">
+  <div class="flex flex-1 flex-col gap-4 p-4 pt-0">
+    <!-- Header Section -->
+    <div class="flex items-center justify-between">
       <div>
         <h2 class="text-2xl font-bold tracking-tight">Dashboard</h2>
         <p class="text-muted-foreground">
@@ -133,61 +134,49 @@ watch(mapData, () => {
       </div>
     </div>
 
-    <div class="flex-1 space-y-4 md:space-y-8 mt-4 md:mt-8">
-      <div class="border-b border-gray-200">
-        <nav class="flex space-x-8" aria-label="Tabs">
-          <button
-            v-for="(tab, index) in ['Übersicht', 'Analyse']"
-            :key="index"
-            @click="activeTab = index"
-            :class="[
-              activeTab === index
-                ? 'border-primary text-primary'
-                : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700',
-              'whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium'
-            ]"
-          >
-            {{ tab }}
-          </button>
-        </nav>
-      </div>
+    <!-- Tabs Navigation -->
+    <div class="border-b border-gray-200">
+      <nav class="flex gap-8" aria-label="Tabs">
+        <button
+          v-for="(tab, index) in ['Übersicht', 'Analyse']"
+          :key="index"
+          @click="activeTab = index"
+          :class="[
+            activeTab === index
+              ? 'border-primary text-primary'
+              : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700',
+            'whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium'
+          ]"
+        >
+          {{ tab }}
+        </button>
+      </nav>
+    </div>
 
-      <!-- Map Tab -->
-      <div v-if="activeTab === 0" class="space-y-4 md:space-y-8">
-        <!-- Map and Chart Row -->
-        <div class="w-full h-[calc(100vh-16rem)] lg:h-[calc(100vh-12rem)]">
-          <template v-if="mapLoading">
-            <div class="flex items-center justify-center h-full">
-              <div class="flex flex-col space-y-3">
-                <Skeleton class="h-[125px] w-[250px] rounded-xl" />
-                <div class="space-y-2">
-                  <Skeleton class="h-4 w-[250px]" />
-                  <Skeleton class="h-4 w-[200px]" />
-                </div>
+    <!-- Main Content -->
+    <div v-if="activeTab === 0" class="grid gap-4">
+      <!-- Map Section -->
+      <div class="rounded-xl overflow-hidden min-h-[calc(100vh-12rem)]">
+        <template v-if="mapLoading">
+          <div class="flex items-center justify-center h-full">
+            <div class="flex flex-col gap-3">
+              <Skeleton class="h-[125px] w-[250px] rounded-xl" />
+              <div class="space-y-2">
+                <Skeleton class="h-4 w-[250px]" />
+                <Skeleton class="h-4 w-[200px]" />
               </div>
             </div>
-          </template>
-          <ArcGISMap 
-            v-else-if="mapData"
-            :data="mapData"
-            @update:selected-values="handleMapValuesUpdate"
-            @update:filtered-features="handleFilteredFeatures"
-            @update:color-property="handleColorPropertyUpdate"
-          />
-        </div>
+          </div>
+        </template>
+        <ArcGISMap 
+          v-else-if="mapData"
+          :data="mapData"
+          @update:selected-values="handleMapValuesUpdate"
+          @update:filtered-features="handleFilteredFeatures"
+          @update:color-property="handleColorPropertyUpdate"
+          class="w-full h-full"
+        />
       </div>
     </div>
   </div>
 </template>
-
-<style scoped>
-.space-y-8 > :not([hidden]) ~ :not([hidden]) {
-  margin-top: 2rem;
-}
-
-@media (max-width: 1024px) {
-  .space-y-4 > :not([hidden]) ~ :not([hidden]) {
-    margin-top: 1rem;
-  }
-}
-</style>
