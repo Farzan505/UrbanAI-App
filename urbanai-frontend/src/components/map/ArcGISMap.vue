@@ -12,11 +12,11 @@
         <calcite-panel id="pickerContainer" heading="Filter Features" width-scale="l" height-scale="l">
           <div class="panel-content">
             <calcite-label>Select Property</calcite-label>
-            <calcite-combobox id="featurePicker" placeholder="Pick a Feature Property" selection-mode="single">
+            <calcite-combobox id="featurePicker" placeholder="Pick a Feature Property" selection-mode="single"  overlay-positioning="fixed">
             </calcite-combobox>
             
             <calcite-label>Select Values</calcite-label>
-            <calcite-combobox id="valuePicker" placeholder="Select Values" selection-mode="multiple">
+            <calcite-combobox id="valuePicker" placeholder="Select Values" selection-mode="multiple"  overlay-positioning="fixed">
             </calcite-combobox>
           </div>
         </calcite-panel>
@@ -55,7 +55,7 @@ declare const require: {
 }
 
 const ARCGIS_API_KEY = import.meta.env.VITE_ARCGIS_API
-const selectedFeature = ref<string[]>(['gebort'])
+const selectedFeature = ref<string[]>([])
 const selectedValues = ref<string[]>([])
 const availableColumns = ref<string[]>([])
 const uniqueValues = ref<string[]>([])
@@ -627,4 +627,10 @@ calcite-combobox-item::part(container) {
 .esri-view-surface--inset-outline {
   outline: none !important;
 }
+
+.panel-content {
+  overflow-y: auto; /* Allow scrolling if needed */
+  padding-bottom: 12px; /* Add padding at the bottom */
+}
+
 </style>
