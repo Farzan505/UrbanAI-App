@@ -1,3 +1,4 @@
+<!-- Previous template, imports, interfaces, and state management remain unchanged -->
 <template>
   <Card class="w-full h-full">
     <CardHeader class="py-2 border-b">
@@ -18,6 +19,20 @@
             <calcite-label>Select Values</calcite-label>
             <calcite-combobox id="valuePicker" placeholder="Select Values" selection-mode="multiple"  overlay-positioning="fixed">
             </calcite-combobox>
+
+            <calcite-label>Statistics</calcite-label>
+            <calcite-chart id="statsChart"
+              type="pie"
+              height-scale="m"
+              width-scale="m"
+              :data="chartData"
+              :config="{
+                margins: { top: 10, right: 10, bottom: 10, left: 10 },
+                colors: ['#fc3e5aff', '#fce138ff', '#4c81cdff', '#f1983cff', '#48885cff', 
+                        '#a553b7ff', '#fff799ff', '#b1a9d0ff', '#6ecffcff', '#fc6f84ff', 
+                        '#6af689ff', '#fcd27eff']
+              }">
+            </calcite-chart>
           </div>
         </calcite-panel>
       </div>
@@ -32,6 +47,7 @@ import { Skeleton } from '../ui/skeleton'
 import { useColorMode } from '@vueuse/core'
 import { useMapData } from '../../composables/useMapData'
 
+// Interfaces
 interface Feature {
   id: string
   type: "Feature"
@@ -39,7 +55,6 @@ interface Feature {
   geometry: any
 }
 
-// Calcite component types
 interface CalciteCombobox extends HTMLElement {
   value: string
   selectedItems: Array<{ value: string }>
@@ -50,21 +65,28 @@ interface CalciteComboboxItem extends HTMLElement {
   setAttribute(name: string, value: string): void
 }
 
-declare const require: {
-  (modules: string[], callback: (...args: any[]) => void): void
-}
+// Define require type
+declare function require(
+  modules: string[],
+  callback: (...modules: any[]) => void
+): void;
 
+// Constants
 const ARCGIS_API_KEY = import.meta.env.VITE_ARCGIS_API
+const ZOOM_THRESHOLD = 14  // Threshold for switching between detailed and overview views
+
+// State
+const mapContainer = ref<HTMLElement | null>(null)
+const mapView = shallowRef<any>(null)
+const map = shallowRef<any>(null)
+const groupLayer = shallowRef<any>(null)
 const selectedFeature = ref<string[]>([])
 const selectedValues = ref<string[]>([])
 const availableColumns = ref<string[]>([])
 const uniqueValues = ref<string[]>([])
-const mapView = shallowRef<any>(null)
-const mapContainer = ref<HTMLElement | null>(null)
-const map = shallowRef<any>(null)
-const groupLayer = shallowRef<any>(null)
+const error = ref<string | null>(null)
 
-const { mapData, error, loading, fetchMapData } = useMapData()
+const { mapData, loading, fetchMapData } = useMapData()
 
 // Theme handling
 const colorMode = useColorMode()
@@ -81,9 +103,27 @@ const currentBasemap = computed(() => {
   return colorMode.value === 'dark' ? DARK_BASEMAP : LIGHT_BASEMAP
 })
 
-// Filtered features based on selection
+// Computed properties
+const chartData = computed(() => {
+  if (!mapData.value?.features || !selectedFeature.value[0]) return []
+
+  const featureProperty = selectedFeature.value[0]
+  const features = selectedValues.value.length > 0 ? filteredFeatures.value : mapData.value.features
+
+  const valueCounts = features.reduce((acc: Record<string, number>, feature: Feature) => {
+    const value = String(feature.properties[featureProperty])
+    acc[value] = (acc[value] || 0) + 1
+    return acc
+  }, {})
+
+  return Object.entries(valueCounts).map(([value, count]) => ({
+    name: value,
+    value: count
+  }))
+})
+
 const filteredFeatures = computed(() => {
-  if (!mapData.value || !selectedFeature.value[0]) return mapData.value?.features
+  if (!mapData.value?.features || !selectedFeature.value[0]) return []
 
   if (selectedValues.value.length === 0) return mapData.value.features
 
@@ -92,6 +132,7 @@ const filteredFeatures = computed(() => {
   )
 })
 
+// Functions
 function loadArcGISModules(): Promise<void> {
   return new Promise((resolve, reject) => {
     require([
@@ -107,22 +148,24 @@ function loadArcGISModules(): Promise<void> {
       "esri/widgets/Legend",
       "esri/widgets/Expand",
       "esri/widgets/LayerList"
-    ], function(
-      esriConfig: any,
-      Map: any,
-      MapView: any,
-      GeoJSONLayer: any,
-      GroupLayer: any,
-      UniqueValueRenderer: any,
-      SimpleRenderer: any,
-      SimpleFillSymbol: any,
-      SimpleMarkerSymbol: any,
-      Legend: any,
-      Expand: any,
-      LayerList: any
-    ) {
+    ], (...modules) => {
       try {
-        (window as any).arcgisModules = {
+        const [
+          esriConfig,
+          Map,
+          MapView,
+          GeoJSONLayer,
+          GroupLayer,
+          UniqueValueRenderer,
+          SimpleRenderer,
+          SimpleFillSymbol,
+          SimpleMarkerSymbol,
+          Legend,
+          Expand,
+          LayerList
+        ] = modules
+
+        ;(window as any).arcgisModules = {
           esriConfig,
           Map,
           MapView,
@@ -145,13 +188,12 @@ function loadArcGISModules(): Promise<void> {
 }
 
 function updateUniqueValues() {
-  if (!mapData.value) return
+  if (!mapData.value?.features) return
 
   uniqueValues.value = [...new Set(mapData.value.features.map(
     feature => String(feature.properties[selectedFeature.value[0]])
   ))].sort()
 
-  // Update value picker items
   const valuePicker = document.getElementById("valuePicker") as CalciteCombobox
   if (valuePicker) {
     valuePicker.innerHTML = ''
@@ -166,7 +208,7 @@ function updateUniqueValues() {
 }
 
 async function updateMapLayers() {
-  if (!mapData.value || !groupLayer.value) return
+  if (!mapData.value?.features || !groupLayer.value) return
 
   const modules = (window as any).arcgisModules
   if (!modules) return
@@ -201,7 +243,7 @@ async function updateMapLayers() {
       colorMap[String(value)] = rgbaColor
     })
 
-    // Create renderers
+    // Create renderers with enhanced styling
     const fillRenderer = new UniqueValueRenderer({
       field: selectedFeature.value[0],
       uniqueValueInfos: values.map(value => ({
@@ -210,7 +252,7 @@ async function updateMapLayers() {
           color: colorMap[String(value)],
           outline: {
             color: colorMap[String(value)].replace('cc', 'ff'),
-            width: 1
+            width: 2
           }
         }),
         label: String(value)
@@ -223,10 +265,10 @@ async function updateMapLayers() {
         value: value,
         symbol: new SimpleMarkerSymbol({
           color: colorMap[String(value)],
-          size: 6,
+          size: 8,
           outline: {
-            color: [255, 255, 255, 0.7],
-            width: 0.5
+            color: [255, 255, 255, 0.9],
+            width: 1
           }
         }),
         label: String(value)
@@ -237,7 +279,7 @@ async function updateMapLayers() {
     const geojsonBlob = new Blob([JSON.stringify(filteredData)], { type: "application/json" })
     const geojsonUrl = URL.createObjectURL(geojsonBlob)
 
-    // Create layers
+    // Create layers with zoom-based visibility
     const detailedLayer = new GeoJSONLayer({
       url: geojsonUrl,
       renderer: fillRenderer,
@@ -253,8 +295,7 @@ async function updateMapLayers() {
           }))
         }]
       },
-      minScale: 10000,
-      maxScale: 0
+      visible: true  // Will be controlled by zoom level
     })
 
     const overviewLayer = new GeoJSONLayer({
@@ -272,14 +313,27 @@ async function updateMapLayers() {
           }))
         }]
       },
-      minScale: 0,
-      maxScale: 10000
+      visible: true  // Will be controlled by zoom level
     })
 
     // Update group layer
     groupLayer.value.removeAll()
     groupLayer.value.add(detailedLayer)
     groupLayer.value.add(overviewLayer)
+
+    // Add zoom change handler to control layer visibility
+    if (mapView.value) {
+      // Initial visibility based on current zoom
+      const currentZoom = mapView.value.zoom;
+      detailedLayer.visible = currentZoom >= ZOOM_THRESHOLD;
+      overviewLayer.visible = currentZoom < ZOOM_THRESHOLD;
+
+      // Watch for zoom changes
+      mapView.value.watch('zoom', (newZoom: number) => {
+        detailedLayer.visible = newZoom >= ZOOM_THRESHOLD;
+        overviewLayer.visible = newZoom < ZOOM_THRESHOLD;
+      });
+    }
 
     // Update legend
     if (mapView.value) {
@@ -492,36 +546,6 @@ async function initializeMap() {
   }
 }
 
-// Watch for changes in selected feature
-watch(selectedFeature, () => {
-  updateUniqueValues()
-  selectedValues.value = []
-  updateMapLayers()
-})
-
-// Watch for changes in selected values
-watch(selectedValues, () => {
-  updateMapLayers()
-})
-
-// Handle theme changes
-watch(currentBasemap, async () => {
-  try {
-    if (map.value) {
-      map.value.basemap = currentBasemap.value
-    }
-  } catch (err) {
-    console.error('Error updating theme:', err)
-  }
-})
-
-// System theme change listener
-prefersDark.addEventListener('change', (e) => {
-  if (colorMode.value === 'auto') {
-    console.log('System theme changed:', e.matches ? 'dark' : 'light')
-  }
-})
-
 async function initializeArcGIS() {
   try {
     // Load ArcGIS CSS
@@ -560,6 +584,35 @@ async function initializeArcGIS() {
   }
 }
 
+// Watchers
+watch(selectedFeature, () => {
+  updateUniqueValues()
+  selectedValues.value = []
+  updateMapLayers()
+})
+
+watch(selectedValues, () => {
+  updateMapLayers()
+})
+
+watch(currentBasemap, async () => {
+  try {
+    if (map.value) {
+      map.value.basemap = currentBasemap.value
+    }
+  } catch (err) {
+    console.error('Error updating theme:', err)
+  }
+})
+
+// System theme change listener
+prefersDark.addEventListener('change', (e) => {
+  if (colorMode.value === 'auto') {
+    console.log('System theme changed:', e.matches ? 'dark' : 'light')
+  }
+})
+
+// Lifecycle hooks
 onMounted(() => {
   initializeArcGIS()
 })
@@ -595,7 +648,7 @@ onUnmounted(() => {
   gap: 12px;
   padding: 12px;
   width: 330px;
-  height: 300px;
+  height: 500px;
 }
 
 calcite-combobox {
@@ -629,8 +682,7 @@ calcite-combobox-item::part(container) {
 }
 
 .panel-content {
-  overflow-y: auto; /* Allow scrolling if needed */
-  padding-bottom: 12px; /* Add padding at the bottom */
+  overflow-y: auto;
+  padding-bottom: 12px;
 }
-
 </style>
