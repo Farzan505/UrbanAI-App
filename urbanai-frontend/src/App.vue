@@ -1,10 +1,18 @@
 <script setup lang="ts">
-import { useTheme } from './composables/useTheme'
-
-// Initialize theme
-useTheme()
+import ArcGISSceneViewer from '@/components/map/ArcGISSceneViewer.vue'
 </script>
 
 <template>
-  <router-view />
+  <div id="app">
+    <ArcGISSceneViewer />
+  </div>
 </template>
+
+<style scoped>
+#app {
+  width: 100%;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+}
+</style>
