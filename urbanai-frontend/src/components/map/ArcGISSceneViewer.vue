@@ -1,39 +1,5 @@
 <template>
   <div class="scene-viewer-container">
-    <!-- API Configuration Panel -->
-    <div class="config-panel">
-      <div class="config-content">
-        <h3>API Configuration</h3>
-        <div class="form-group">
-          <label for="apiUrl">API Base URL:</label>
-          <input 
-            id="apiUrl" 
-            v-model="apiBaseUrl" 
-            type="text" 
-            placeholder="http://localhost:8080"
-            class="api-input"
-          />
-        </div>
-        <div class="form-group">
-          <label for="gmlId">GML ID:</label>
-          <input 
-            id="gmlId" 
-            v-model="gmlId" 
-            type="text" 
-            placeholder="DEBY_LOD2_4907950"
-            class="api-input"
-          />
-        </div>
-        <Button @click="fetchGeometry" :disabled="loading" class="fetch-btn">
-          {{ loading ? 'Loading...' : 'Load Geometry' }}
-        </Button>
-        <div v-if="error" class="error-message">{{ error }}</div>
-        <div v-if="availableProperties.length > 0" class="success-message">
-          ✅ Loaded {{ availableProperties.length }} properties
-        </div>
-      </div>
-    </div>
-
     <!-- ArcGIS Scene View Container -->
     <div id="viewDiv" class="map-container"></div>
     
@@ -48,12 +14,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
-import { Button } from '@/components/ui/button'
+import { ref, onMounted, onUnmounted, watch, toRefs } from 'vue'
+
+// Props
+interface Props {
+  gmlIds: string[]
+  apiBaseUrl?: string
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  apiBaseUrl: 'http://localhost:8080'
+})
+
+const { gmlIds, apiBaseUrl } = toRefs(props)
 
 // Reactive variables
-const apiBaseUrl = ref('http://localhost:8080')
-const gmlId = ref('DEBY_LOD2_4907950')
 const loading = ref(false)
 const error = ref('')
 const selectedProperty = ref('')
@@ -75,14 +50,44 @@ interface GeometryResponse {
   [key: string]: any // Allow dynamic keys since the structure is nested
 }
 
+// Watch for changes in GML IDs and fetch geometry automatically
+watch(gmlIds, async (newGmlIds, oldGmlIds) => {
+  console.log('👀 GML IDs changed:', { oldGmlIds, newGmlIds })
+  console.log('View and map status:', { view: !!view, map: !!map })
+  
+  if (newGmlIds && newGmlIds.length > 0 && view && map) {
+    console.log('🚀 Triggering fetchGeometry from watch...')
+    await fetchGeometry()
+  } else {
+    console.log('⚠️ Not fetching geometry:', {
+      hasGmlIds: !!(newGmlIds && newGmlIds.length > 0),
+      hasView: !!view,
+      hasMap: !!map
+    })
+  }
+}, { immediate: false })
+
 // Fetch geometry data from API
 const fetchGeometry = async () => {
+  console.log('🌐 Starting fetchGeometry...')
+  
+  if (!gmlIds.value || gmlIds.value.length === 0) {
+    error.value = 'No GML IDs provided'
+    console.error('❌ No GML IDs provided')
+    return
+  }
+
+  console.log('📡 Fetching geometry for GML IDs:', gmlIds.value)
   loading.value = true
   error.value = ''
   
   try {
+    // Join multiple GML IDs with comma for the API call
+    const gmlIdParam = gmlIds.value.join(',')
+    console.log('🔗 API URL:', `${apiBaseUrl.value}/api/geometry/get_geometry?gmlids=${gmlIdParam}`)
+    
     const response = await fetch(
-      `${apiBaseUrl.value}/api/geometry/get_geometry?gmlids=${gmlId.value}`
+      `${apiBaseUrl.value}/api/geometry/get_geometry?gmlids=${gmlIdParam}`
     )
     
     if (!response.ok) {
@@ -90,64 +95,100 @@ const fetchGeometry = async () => {
     }
     
     const data: GeometryResponse = await response.json()
-    console.log('API Response:', data)
+    console.log('✅ API Response received:', data)
     
     // Process the data for ArcGIS
+    console.log('🔄 Starting processGeometryData...')
     await processGeometryData(data)
+    console.log('✅ processGeometryData completed')
     
   } catch (err) {
     error.value = `Failed to fetch geometry: ${err instanceof Error ? err.message : 'Unknown error'}`
-    console.error('Fetch error:', err)
+    console.error('❌ Fetch error:', err)
   } finally {
     loading.value = false
+    console.log('🏁 fetchGeometry completed, loading:', loading.value)
   }
 }
 
 // Process geometry data and display in ArcGIS
 const processGeometryData = async (data: GeometryResponse) => {
+  console.log('🔄 Starting processGeometryData...')
+  
   if (!view || !map) {
     error.value = 'Map not initialized'
+    console.error('❌ Map or view not initialized:', { view: !!view, map: !!map })
     return
+  }
+
+  if (!view.ready) {
+    console.log('⏳ View not ready, waiting...')
+    await view.when()
+    console.log('✅ View is now ready')
   }
 
   const { FeatureLayer } = esriModules
 
   try {
+    console.log('🧹 Clearing existing layers...')
     // Clear existing layers
     map.layers.removeAll()
+
+    console.log('Processing geometry data:', data)
+    console.log('Data keys:', Object.keys(data))
+
+    // Check if data is wrapped in 'results' property
+    let geometryData = data
+    if (data.results) {
+      console.log('Found data in results property')
+      console.log('Results keys:', Object.keys(data.results))
+      geometryData = data.results
+    }
 
     // Extract surfaces_adiabatic from nested structure
     let adiabaticData: any = null
     let shadingData: any = null
 
     // Look for surfaces_adiabatic in the response structure
-    if (data.surfaces_adiabatic) {
-      adiabaticData = data.surfaces_adiabatic
+    if (geometryData.surfaces_adiabatic) {
+      adiabaticData = geometryData.surfaces_adiabatic
+      console.log('Found surfaces_adiabatic directly')
     } else {
       // Check if it's nested in results or other structure
-      for (const key in data) {
-        if (data[key] && data[key].surfaces_adiabatic) {
-          adiabaticData = data[key].surfaces_adiabatic
+      for (const key in geometryData) {
+        if (geometryData[key] && geometryData[key].surfaces_adiabatic) {
+          adiabaticData = geometryData[key].surfaces_adiabatic
+          console.log('Found surfaces_adiabatic in key:', key)
           break
         }
       }
     }
 
     // Look for shading_surfaces in the response structure
-    if (data.shading_surfaces) {
-      shadingData = data.shading_surfaces
+    if (geometryData.shading_surfaces) {
+      shadingData = geometryData.shading_surfaces
+      console.log('Found shading_surfaces directly')
     } else {
       // Check if it's nested in results or other structure
-      for (const key in data) {
-        if (data[key] && data[key].shading_surfaces) {
-          shadingData = data[key].shading_surfaces
+      for (const key in geometryData) {
+        if (geometryData[key] && geometryData[key].shading_surfaces) {
+          shadingData = geometryData[key].shading_surfaces
+          console.log('Found shading_surfaces in key:', key)
           break
         }
       }
     }
 
-    console.log('Found adiabatic data:', adiabaticData)
-    console.log('Found shading data:', shadingData)
+    console.log('Final adiabatic data:', adiabaticData)
+    console.log('Final shading data:', shadingData)
+
+    // If no data found, let's see what's available
+    if (!adiabaticData && !shadingData) {
+      console.log('No expected data found. Available keys in geometryData:', Object.keys(geometryData))
+      for (const key in geometryData) {
+        console.log(`Key: ${key}, Type: ${typeof geometryData[key]}, Value:`, geometryData[key])
+      }
+    }
 
     // Store current data for property visualization
     currentData = { adiabaticData, shadingData }
@@ -168,6 +209,7 @@ const processGeometryData = async (data: GeometryResponse) => {
 
     // Add shading surfaces (always visible)
     if (shadingData && shadingData.features && shadingData.features.length > 0) {
+      console.log('Processing shading surfaces...')
       const shadingFeatures = shadingData.features.map((feature: any, index: number) => {
         console.log('Processing shading feature:', index, feature.geometry)
         
@@ -184,55 +226,63 @@ const processGeometryData = async (data: GeometryResponse) => {
         }
       })
 
-      const shadingLayer = new FeatureLayer({
-        source: shadingFeatures,
-        objectIdField: "ObjectID",
-        title: "Shading Surfaces",
-        fields: [
-          { name: "ObjectID", alias: "ObjectID", type: "oid" },
-          ...Object.keys(shadingData.features[0]?.properties || {}).map((prop: string) => ({
-            name: prop,
-            alias: prop,
-            type: "string"
-          }))
-        ],
-        renderer: {
-          type: "simple",
-          symbol: {
-            type: "polygon-3d",
-            symbolLayers: [{
-              type: "fill",
-              material: { 
-                color: [128, 128, 128, 0.7],
-                colorMixMode: "replace"
-              },
-              outline: {
-                color: [255, 255, 255, 1.0],
-                size: "2px"
-              }
+      try {
+        const shadingLayer = new FeatureLayer({
+          source: shadingFeatures,
+          objectIdField: "ObjectID",
+          title: "Shading Surfaces",
+          fields: [
+            { name: "ObjectID", alias: "ObjectID", type: "oid" },
+            ...Object.keys(shadingData.features[0]?.properties || {}).map((prop: string) => ({
+              name: prop,
+              alias: prop,
+              type: "string"
+            }))
+          ],
+          renderer: {
+            type: "simple",
+            symbol: {
+              type: "polygon-3d",
+              symbolLayers: [{
+                type: "fill",
+                material: { 
+                  color: [128, 128, 128, 0.7],
+                  colorMixMode: "replace"
+                },
+                outline: {
+                  color: [255, 255, 255, 1.0],
+                  size: "2px"
+                }
+              }]
+            }
+          },
+          popupTemplate: {
+            title: "Shading Surface",
+            content: [{
+              type: "fields",
+              fieldInfos: Object.keys(shadingData.features[0]?.properties || {}).map((prop: string) => ({
+                fieldName: prop,
+                label: prop
+              }))
             }]
           }
-        },
-        popupTemplate: {
-          title: "Shading Surface",
-          content: [{
-            type: "fields",
-            fieldInfos: Object.keys(shadingData.features[0]?.properties || {}).map((prop: string) => ({
-              fieldName: prop,
-              label: prop
-            }))
-          }]
-        }
-      })
+        })
 
-      map.add(shadingLayer)
-      console.log('Added shading layer with', shadingFeatures.length, 'features')
+        map.add(shadingLayer)
+        console.log('✅ Successfully added shading layer with', shadingFeatures.length, 'features')
+      } catch (layerError) {
+        console.error('❌ Error creating shading layer:', layerError)
+      }
+    } else {
+      console.log('No shading data available')
     }
 
     // If we have a selected property, visualize by that property
     if (selectedProperty.value && adiabaticData) {
+      console.log('Visualizing by property:', selectedProperty.value)
       visualizeByProperty(selectedProperty.value)
     } else if (adiabaticData && adiabaticData.features && adiabaticData.features.length > 0) {
+      console.log('Processing adiabatic surfaces...')
       // Otherwise show default red adiabatic surfaces
       const adiabaticFeatures = adiabaticData.features.map((feature: any, index: number) => {
         console.log('Processing adiabatic feature:', index, feature.geometry)
@@ -250,53 +300,65 @@ const processGeometryData = async (data: GeometryResponse) => {
         }
       })
 
-      const adiabaticLayer = new FeatureLayer({
-        source: adiabaticFeatures,
-        objectIdField: "ObjectID",
-        title: "Adiabatic Surfaces",
-        fields: [
-          { name: "ObjectID", alias: "ObjectID", type: "oid" },
-          ...Object.keys(adiabaticData.features[0]?.properties || {}).map((prop: string) => ({
-            name: prop,
-            alias: prop,
-            type: "string"
-          }))
-        ],
-        renderer: {
-          type: "simple",
-          symbol: {
-            type: "polygon-3d",
-            symbolLayers: [{
-              type: "fill",
-              material: { 
-                color: [255, 100, 100, 0.8],
-                colorMixMode: "replace"
-              },
-              outline: {
-                color: [255, 255, 255, 1.0],
-                size: "2px"
-              }
+      try {
+        const adiabaticLayer = new FeatureLayer({
+          source: adiabaticFeatures,
+          objectIdField: "ObjectID",
+          title: "Adiabatic Surfaces",
+          fields: [
+            { name: "ObjectID", alias: "ObjectID", type: "oid" },
+            ...Object.keys(adiabaticData.features[0]?.properties || {}).map((prop: string) => ({
+              name: prop,
+              alias: prop,
+              type: "string"
+            }))
+          ],
+          renderer: {
+            type: "simple",
+            symbol: {
+              type: "polygon-3d",
+              symbolLayers: [{
+                type: "fill",
+                material: { 
+                  color: [255, 100, 100, 0.8],
+                  colorMixMode: "replace"
+                },
+                outline: {
+                  color: [255, 255, 255, 1.0],
+                  size: "2px"
+                }
+              }]
+            }
+          },
+          popupTemplate: {
+            title: "Adiabatic Surface",
+            content: [{
+              type: "fields",
+              fieldInfos: Object.keys(adiabaticData.features[0]?.properties || {}).map((prop: string) => ({
+                fieldName: prop,
+                label: prop
+              }))
             }]
           }
-        },
-        popupTemplate: {
-          title: "Adiabatic Surface",
-          content: [{
-            type: "fields",
-            fieldInfos: Object.keys(adiabaticData.features[0]?.properties || {}).map((prop: string) => ({
-              fieldName: prop,
-              label: prop
-            }))
-          }]
-        }
-      })
+        })
 
-      map.add(adiabaticLayer)
-      console.log('Added adiabatic layer with', adiabaticFeatures.length, 'features')
+        map.add(adiabaticLayer)
+        console.log('✅ Successfully added adiabatic layer with', adiabaticFeatures.length, 'features')
+      } catch (layerError) {
+        console.error('❌ Error creating adiabatic layer:', layerError)
+      }
+    } else {
+      console.log('No adiabatic data available')
     }
 
     // Calculate extent and zoom to data
-    await zoomToData({ adiabaticData, shadingData })
+    console.log('Attempting to zoom to data...')
+    try {
+      await zoomToData({ adiabaticData, shadingData })
+      console.log('✅ Successfully zoomed to data')
+    } catch (zoomError) {
+      console.error('❌ Error zooming to data:', zoomError)
+    }
 
   } catch (err) {
     error.value = `Failed to process geometry data: ${err instanceof Error ? err.message : 'Unknown error'}`
@@ -587,6 +649,25 @@ const visualizeByProperty = (selectedProperty: string) => {
 // Initialize ArcGIS Map
 const initializeMap = async () => {
   try {
+    console.log('🗺️ Starting map initialization...')
+    
+    // Check if the container exists and has proper dimensions
+    const container = document.getElementById("viewDiv")
+    if (!container) {
+      throw new Error('Map container not found')
+    }
+    
+    const containerRect = container.getBoundingClientRect()
+    console.log('📐 Map container dimensions:', {
+      width: containerRect.width,
+      height: containerRect.height,
+      visible: containerRect.width > 0 && containerRect.height > 0
+    })
+    
+    if (containerRect.width === 0 || containerRect.height === 0) {
+      console.warn('⚠️ Map container has zero dimensions!')
+    }
+
     // Load ArcGIS modules
     const modules = await new Promise((resolve) => {
       (window as any).require([
@@ -627,6 +708,7 @@ const initializeMap = async () => {
       basemap: "arcgis/topographic",
       ground: "world-elevation"
     })
+    console.log('✅ Map created')
 
     // Create scene view
     view = new SceneView({
@@ -647,6 +729,11 @@ const initializeMap = async () => {
         }
       }
     })
+    console.log('✅ SceneView created')
+
+    // Wait for view to be ready
+    await view.when()
+    console.log('✅ SceneView is ready')
 
     // Add widgets
     const legend = new Legend({ view })
@@ -693,11 +780,11 @@ const initializeMap = async () => {
       })
     })
 
-    console.log('ArcGIS Map initialized successfully')
+    console.log('✅ ArcGIS Map initialized successfully')
 
   } catch (err) {
     error.value = `Failed to initialize map: ${err instanceof Error ? err.message : 'Unknown error'}`
-    console.error('Map initialization error:', err)
+    console.error('❌ Map initialization error:', err)
   }
 }
 
@@ -739,10 +826,22 @@ const loadArcGISAPI = () => {
 // Component lifecycle
 onMounted(async () => {
   try {
+    console.log('🚀 Component mounted, initializing...')
     await loadArcGISAPI()
+    console.log('✅ ArcGIS API loaded')
     await initializeMap()
+    console.log('✅ Map initialized')
+    
+    // Auto-load geometry if GML IDs are provided
+    if (gmlIds.value && gmlIds.value.length > 0) {
+      console.log('🎯 GML IDs available on mount, fetching geometry:', gmlIds.value)
+      await fetchGeometry()
+    } else {
+      console.log('ℹ️ No GML IDs available on mount')
+    }
   } catch (err) {
     error.value = `Initialization failed: ${err instanceof Error ? err.message : 'Unknown error'}`
+    console.error('❌ Initialization error:', err)
   }
 })
 
@@ -757,98 +856,16 @@ onUnmounted(() => {
 .scene-viewer-container {
   position: relative;
   width: 100%;
-  height: 100vh;
+  height: 100%;
   display: flex;
   flex-direction: column;
-}
-
-.config-panel {
-  background: white;
-  border-bottom: 1px solid #ddd;
-  padding: 1rem;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  z-index: 1000;
-}
-
-.config-content {
-  max-width: 1200px;
-  margin: 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
-.config-content h3 {
-  margin: 0;
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #333;
-}
-
-.form-group {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.form-group label {
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: #555;
-  white-space: nowrap;
-}
-
-.api-input {
-  padding: 0.5rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 0.9rem;
-  min-width: 200px;
-}
-
-.api-input:focus {
-  outline: none;
-  border-color: #0079c1;
-  box-shadow: 0 0 0 2px rgba(0, 121, 193, 0.2);
-}
-
-.fetch-btn {
-  margin-left: 1rem;
-}
-
-.error-message {
-  color: #d32f2f;
-  font-size: 0.9rem;
-  padding: 0.5rem;
-  background-color: #ffebee;
-  border: 1px solid #ffcdd2;
-  border-radius: 4px;
-}
-
-.success-message {
-  color: #2e7d32;
-  font-size: 0.9rem;
-  padding: 0.5rem;
-  background-color: #e8f5e8;
-  border: 1px solid #c8e6c9;
-  border-radius: 4px;
 }
 
 .map-container {
   flex: 1;
   width: 100%;
-  min-height: 500px;
-}
-
-.picker-panel {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-  z-index: 1000;
+  height: 100%;
+  min-height: 400px;
 }
 
 .panel-content {
