@@ -44,9 +44,9 @@ const items = computed(() => [
   },
   {
     title: "Datenquellen",
-    url: "#",
+    url: "/data-sources",
     icon: BookOpen,
-    isActive: false,
+    isActive: route.path === '/data-sources',
   },
 ])
 </script>

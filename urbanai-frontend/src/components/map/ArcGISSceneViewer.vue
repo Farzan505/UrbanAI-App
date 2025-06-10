@@ -20,16 +20,19 @@ import { ref, onMounted, onUnmounted, watch, toRefs } from 'vue'
 interface Props {
   gmlIds: string[]
   apiBaseUrl?: string
+  geometryData?: any
+  geometryLoading?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  apiBaseUrl: 'http://localhost:8080'
+  apiBaseUrl: 'http://localhost:8080',
+  geometryData: null,
+  geometryLoading: false
 })
 
-const { gmlIds, apiBaseUrl } = toRefs(props)
+const { gmlIds, apiBaseUrl, geometryData, geometryLoading } = toRefs(props)
 
 // Reactive variables
-const loading = ref(false)
 const error = ref('')
 const selectedProperty = ref('')
 const availableProperties = ref<string[]>([])
@@ -50,66 +53,22 @@ interface GeometryResponse {
   [key: string]: any // Allow dynamic keys since the structure is nested
 }
 
-// Watch for changes in GML IDs and fetch geometry automatically
-watch(gmlIds, async (newGmlIds, oldGmlIds) => {
-  console.log('👀 GML IDs changed:', { oldGmlIds, newGmlIds })
+// Watch for changes in geometry data and process it automatically
+watch(geometryData, async (newGeometryData) => {
+  console.log('👀 Geometry data changed:', { hasData: !!newGeometryData })
   console.log('View and map status:', { view: !!view, map: !!map })
   
-  if (newGmlIds && newGmlIds.length > 0 && view && map) {
-    console.log('🚀 Triggering fetchGeometry from watch...')
-    await fetchGeometry()
+  if (newGeometryData && view && map) {
+    console.log('🚀 Triggering processGeometryData from watch...')
+    await processGeometryData(newGeometryData)
   } else {
-    console.log('⚠️ Not fetching geometry:', {
-      hasGmlIds: !!(newGmlIds && newGmlIds.length > 0),
+    console.log('⚠️ Not processing geometry:', {
+      hasData: !!newGeometryData,
       hasView: !!view,
       hasMap: !!map
     })
   }
 }, { immediate: false })
-
-// Fetch geometry data from API
-const fetchGeometry = async () => {
-  console.log('🌐 Starting fetchGeometry...')
-  
-  if (!gmlIds.value || gmlIds.value.length === 0) {
-    error.value = 'No GML IDs provided'
-    console.error('❌ No GML IDs provided')
-    return
-  }
-
-  console.log('📡 Fetching geometry for GML IDs:', gmlIds.value)
-  loading.value = true
-  error.value = ''
-  
-  try {
-    // Join multiple GML IDs with comma for the API call
-    const gmlIdParam = gmlIds.value.join(',')
-    console.log('🔗 API URL:', `${apiBaseUrl.value}/api/geometry/get_geometry?gmlids=${gmlIdParam}`)
-    
-    const response = await fetch(
-      `${apiBaseUrl.value}/api/geometry/get_geometry?gmlids=${gmlIdParam}`
-    )
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
-    
-    const data: GeometryResponse = await response.json()
-    console.log('✅ API Response received:', data)
-    
-    // Process the data for ArcGIS
-    console.log('🔄 Starting processGeometryData...')
-    await processGeometryData(data)
-    console.log('✅ processGeometryData completed')
-    
-  } catch (err) {
-    error.value = `Failed to fetch geometry: ${err instanceof Error ? err.message : 'Unknown error'}`
-    console.error('❌ Fetch error:', err)
-  } finally {
-    loading.value = false
-    console.log('🏁 fetchGeometry completed, loading:', loading.value)
-  }
-}
 
 // Process geometry data and display in ArcGIS
 const processGeometryData = async (data: GeometryResponse) => {
@@ -832,12 +791,12 @@ onMounted(async () => {
     await initializeMap()
     console.log('✅ Map initialized')
     
-    // Auto-load geometry if GML IDs are provided
-    if (gmlIds.value && gmlIds.value.length > 0) {
-      console.log('🎯 GML IDs available on mount, fetching geometry:', gmlIds.value)
-      await fetchGeometry()
+    // Auto-process geometry if data is available
+    if (geometryData.value) {
+      console.log('🎯 Geometry data available on mount, processing...')
+      await processGeometryData(geometryData.value)
     } else {
-      console.log('ℹ️ No GML IDs available on mount')
+      console.log('ℹ️ No geometry data available on mount')
     }
   } catch (err) {
     error.value = `Initialization failed: ${err instanceof Error ? err.message : 'Unknown error'}`

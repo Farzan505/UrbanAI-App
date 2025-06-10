@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import AppLayout from '@/components/AppLayout.vue'
-import BuildingViewer from '@/components/BuildingViewer.vue'
+import AppLayout from '@/layouts/AppLayout.vue'
+import BuildingViewer from '@/pages/BuildingViewer.vue'
+import DataSources from '@/pages/DataSources.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -19,6 +20,11 @@ const router = createRouter({
           name: 'gebid',
           component: BuildingViewer,
           props: true
+        },
+        {
+          path: 'data-sources',
+          name: 'data-sources',
+          component: DataSources
         }
       ]
     }
