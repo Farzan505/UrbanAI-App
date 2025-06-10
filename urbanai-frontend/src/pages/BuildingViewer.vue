@@ -1,14 +1,22 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, onMounted, watch, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger, SheetFooter } from '@/components/ui/sheet'
+import { Separator } from '@/components/ui/separator'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
+import { Badge } from '@/components/ui/badge'
 import ArcGISSceneViewer from '@/components/map/ArcGISSceneViewer.vue'
+import { Plus, Settings, X } from 'lucide-vue-next'
 
 // Router
 const route = useRoute()
-const router = useRouter()
 
 // Props (for when accessed via route params)
 interface Props {
@@ -29,6 +37,27 @@ const buildingData = ref<any>(null)
 const geometryData = ref<any>(null)
 const geometryLoading = ref(false)
 const geometryError = ref('')
+
+// Retrofit scenario state
+const isSheetOpen = ref(false)
+const isLoadingFormData = ref(false)
+const formDataError = ref('')
+const formData = ref<FormDataResponse | null>(null)
+const retrofitScenario = ref<RetrofitScenario | null>(null)
+
+// Form state for construction (4 types)
+const selectedConstructions = ref<{[key: string]: string}>({
+  'Außenwand': '',
+  'Boden': '',
+  'Dach': '',
+  'Fenster': ''
+})
+const constructionYear = ref<string>('')
+
+// Form state for HVAC
+const selectedHVACType = ref<string>('')
+const selectedHVAC = ref<string>('')
+const hvacYear = ref<string>('')
 
 // Interface for the API response
 interface BuildingDataResponse {
@@ -65,6 +94,65 @@ interface BuildingDataResponse {
 // Interface for geometry response
 interface GeometryResponse {
   [key: string]: any // Allow dynamic keys since the structure is nested
+}
+
+// Interface for form data response
+interface FormDataResponse {
+  construction_types: string[]
+  hvac_types: string[]
+  construction_samples: {
+    [key: string]: Array<{
+      construction_number: string
+      construction_name: string
+      construction_type: string
+    }>
+  }
+  hvac_samples: {
+    [key: string]: Array<{
+      hvac_number: string
+      hvac_name: string
+      hvac_type: string
+    }>
+  }
+  co2_path_scenarios: string[]
+  co2_cost_scenarios: string[]
+  form_structure: {
+    construction_fields: string[]
+    hvac_fields: string[]
+    co2_scenario_fields: string[]
+  }
+  year_ranges: {
+    construction_retrofit_year: {
+      min: number
+      max: number
+      default: number
+      description: string
+    }
+    hvac_retrofit_year: {
+      min: number
+      max: number
+      default: number
+      description: string
+    }
+  }
+}
+
+// Interface for retrofit scenario
+interface RetrofitScenario {
+  construction: {
+    [constructionType: string]: {
+      construction_number: string
+      construction_name: string
+      construction_type: string
+    }
+  }
+  construction_year: string
+  hvac: {
+    hvac_number: string
+    hvac_name: string
+    hvac_type: string
+  }
+  hvac_year: string
 }
 
 // Search for building by GEBID
@@ -183,6 +271,144 @@ const fetchGeometry = async (gmlIds: string[]) => {
     console.log('🏁 fetchGeometry completed, loading:', geometryLoading.value)
   }
 }
+
+// Fetch form data for retrofit scenarios
+const fetchFormData = async () => {
+  if (formData.value) return // Already loaded
+
+  isLoadingFormData.value = true
+  formDataError.value = ''
+  
+  try {
+    const response = await fetch(`${apiBaseUrl.value}/api/construction-hvac/form-data`)
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    const data: FormDataResponse = await response.json()
+    console.log('Form data response:', data)
+    
+    formData.value = data
+    
+    // Set default years if available
+    if (data.year_ranges) {
+      if (!constructionYear.value) {
+        constructionYear.value = data.year_ranges.construction_retrofit_year.default.toString()
+      }
+      if (!hvacYear.value) {
+        hvacYear.value = data.year_ranges.hvac_retrofit_year.default.toString()
+      }
+    }
+    
+  } catch (err) {
+    formDataError.value = `Failed to fetch form data: ${err instanceof Error ? err.message : 'Unknown error'}`
+    console.error('Form data fetch error:', err)
+  } finally {
+    isLoadingFormData.value = false
+  }
+}
+
+// Handle opening retrofit scenario sheet
+const openRetrofitSheet = () => {
+  isSheetOpen.value = true
+  fetchFormData()
+}
+
+// Check if all construction types are selected
+const isConstructionComplete = computed(() => {
+  return Object.values(selectedConstructions.value).every(val => val !== '')
+})
+
+// Get construction options for a specific type
+const getConstructionOptions = (constructionType: string) => {
+  return formData.value?.construction_samples[constructionType] || []
+}
+
+// Get HVAC options for selected type
+const getHVACOptions = computed(() => {
+  return selectedHVACType.value ? 
+    (formData.value?.hvac_samples[selectedHVACType.value] || []) : 
+    []
+})
+
+// Get construction summary for display
+const constructionSummary = computed(() => {
+  if (!retrofitScenario.value) return ''
+  
+  const constructionTypes = Object.keys(retrofitScenario.value.construction)
+  if (constructionTypes.length === 0) return 'Keine Auswahl'
+  
+  return constructionTypes.join(', ')
+})
+
+// Handle saving retrofit scenario
+const saveRetrofitScenario = () => {
+  if (!isConstructionComplete.value || !selectedHVAC.value || !constructionYear.value || !hvacYear.value) {
+    return // Validation failed
+  }
+
+  const constructionData: {[key: string]: any} = {}
+  
+  // Build construction data object
+  Object.keys(selectedConstructions.value).forEach(constructionType => {
+    const selectedNumber = selectedConstructions.value[constructionType]
+    const constructionItem = formData.value?.construction_samples[constructionType]?.find(
+      item => item.construction_number === selectedNumber
+    )
+    if (constructionItem) {
+      constructionData[constructionType] = constructionItem
+    }
+  })
+
+  const hvacItem = getHVACOptions.value.find(item => item.hvac_number === selectedHVAC.value)
+  if (!hvacItem) return
+
+  retrofitScenario.value = {
+    construction: constructionData,
+    construction_year: constructionYear.value,
+    hvac: hvacItem,
+    hvac_year: hvacYear.value
+  }
+
+  isSheetOpen.value = false
+  
+  // TODO: Send to backend for calculation and storing
+  console.log('Saved retrofit scenario:', retrofitScenario.value)
+}
+
+// Handle canceling/removing retrofit scenario
+const removeRetrofitScenario = () => {
+  retrofitScenario.value = null
+  selectedConstructions.value = {
+    'Außenwand': '',
+    'Boden': '',
+    'Dach': '',
+    'Fenster': ''
+  }
+  selectedHVACType.value = ''
+  selectedHVAC.value = ''
+  constructionYear.value = ''
+  hvacYear.value = ''
+}
+
+// Handle modifying existing scenario
+const modifyRetrofitScenario = () => {
+  if (retrofitScenario.value) {
+    // Restore construction selections
+    Object.keys(retrofitScenario.value.construction).forEach(constructionType => {
+      selectedConstructions.value[constructionType] = retrofitScenario.value!.construction[constructionType].construction_number
+    })
+    constructionYear.value = retrofitScenario.value.construction_year
+    
+    // Restore HVAC selections
+    selectedHVACType.value = retrofitScenario.value.hvac.hvac_type
+    selectedHVAC.value = retrofitScenario.value.hvac.hvac_number
+    hvacYear.value = retrofitScenario.value.hvac_year
+  }
+  isSheetOpen.value = true
+  fetchFormData()
+}
 </script>
 
 <template>
@@ -266,7 +492,398 @@ const fetchGeometry = async (gmlIds: string[]) => {
           <div class="lg:col-span-1">
             <Card class="w-full h-[600px]">
               <CardHeader>
-                <CardTitle>Gebäudeinformationen</CardTitle>
+                <div class="flex items-center justify-between">
+                  <CardTitle>Gebäudeinformationen</CardTitle>
+                  
+                  <!-- Retrofit Scenario Button or Hover Card -->
+                  <div class="flex items-center space-x-2">
+                    <!-- Show button if no scenario exists -->
+                    <Sheet v-if="!retrofitScenario" :open="isSheetOpen" @update:open="isSheetOpen = $event">
+                      <SheetTrigger as-child>
+                        <Button
+                          size="sm" 
+                          variant="outline"
+                          @click="openRetrofitSheet"
+                          class="flex items-center space-x-1"
+                        >
+                          <Plus class="h-4 w-4" />
+                          <span class="hidden sm:inline">Sanierungszenario hinzufügen</span>
+                          <span class="sm:hidden">Szenario</span>
+                        </Button>
+                      </SheetTrigger>
+                      
+                      <SheetContent side="right" class="!w-[480px] sm:!w-[650px] !max-w-none flex flex-col">
+                        <SheetHeader>
+                          <SheetTitle>Sanierungszenario hinzufügen</SheetTitle>
+                          <SheetDescription>
+                            Wählen Sie Konstruktions- und TGA-Maßnahmen für die Gebäudesanierung aus.
+                          </SheetDescription>
+                        </SheetHeader>
+                        
+                        <!-- Scrollable Content Area -->
+                        <div class="flex-1 overflow-y-auto py-4">
+                          <div class="space-y-6 px-4">
+                            <!-- Form Data Error -->
+                            <div v-if="formDataError" class="bg-red-50 border border-red-200 rounded-md p-3">
+                              <p class="text-sm text-red-600">{{ formDataError }}</p>
+                            </div>
+                            
+                            <!-- Loading state -->
+                            <div v-if="isLoadingFormData" class="space-y-4">
+                              <Skeleton class="h-4 w-full" />
+                              <Skeleton class="h-10 w-full" />
+                              <Skeleton class="h-4 w-full" />
+                              <Skeleton class="h-10 w-full" />
+                            </div>
+                            
+                            <!-- Form content -->
+                            <div v-else-if="formData" class="space-y-6">
+                              <!-- Construction Section -->
+                              <div class="space-y-4">
+                                <div>
+                                  <h3 class="text-lg font-medium">
+                                    Konstruktion
+                                  </h3>
+                                  <p class="text-sm text-muted-foreground">Auswahl von 4 Konstruktionsmaßnahmen</p>
+                                </div>
+                                
+                                <!-- Year Input for Construction -->
+                                <div class="space-y-2">
+                                  <Label for="construction-year">Sanierungsjahr Konstruktion</Label>
+                                  <Input
+                                    id="construction-year"
+                                    v-model="constructionYear"
+                                    type="number"
+                                    placeholder="z.B. 2025"
+                                    :min="formData.year_ranges?.construction_retrofit_year?.min || 2024"
+                                    :max="formData.year_ranges?.construction_retrofit_year?.max || 2050"
+                                  />
+                                </div>
+                                
+                                <!-- 4 Construction Type Selections -->
+                                <div class="space-y-4">
+                                  <div v-for="constructionType in formData.construction_types" :key="constructionType" class="space-y-2">
+                                    <Label :for="`construction-${constructionType}`" class="text-sm font-medium">{{ constructionType }}</Label>
+                                    <Select v-model="selectedConstructions[constructionType]">
+                                      <SelectTrigger :id="`construction-${constructionType}`">
+                                        <SelectValue placeholder="Wählen Sie..." />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem
+                                          v-for="item in getConstructionOptions(constructionType)"
+                                          :key="item.construction_number"
+                                          :value="item.construction_number"
+                                        >
+                                          {{ item.construction_name }}
+                                        </SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              <Separator />
+                              
+                              <!-- HVAC Section -->
+                              <div class="space-y-4">
+                                <div>
+                                  <h3 class="text-lg font-medium">
+                                    TGA (Technische Gebäudeausrüstung)
+                                  </h3>
+                                  <p class="text-sm text-muted-foreground">Auswahl der TGA-Maßnahmen</p>
+                                </div>
+                                
+                                <!-- Year Input for HVAC -->
+                                <div class="space-y-2">
+                                  <Label for="hvac-year">Sanierungsjahr TGA</Label>
+                                  <Input
+                                    id="hvac-year"
+                                    v-model="hvacYear"
+                                    type="number"
+                                    placeholder="z.B. 2025"
+                                    :min="formData.year_ranges?.hvac_retrofit_year?.min || 2024"
+                                    :max="formData.year_ranges?.hvac_retrofit_year?.max || 2050"
+                                  />
+                                </div>
+                                
+                                <!-- HVAC Type Selection -->
+                                <div class="space-y-2">
+                                  <Label for="hvac-type-select">TGA-Typ</Label>
+                                  <Select v-model="selectedHVACType">
+                                    <SelectTrigger id="hvac-type-select">
+                                      <SelectValue placeholder="Wählen Sie TGA-Typ..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem
+                                        v-for="hvacType in formData.hvac_types"
+                                        :key="hvacType"
+                                        :value="hvacType"
+                                      >
+                                        {{ hvacType }}
+                                      </SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                
+                                <!-- Specific HVAC Selection -->
+                                <div v-if="selectedHVACType" class="space-y-2">
+                                  <Label for="hvac-item-select">{{ selectedHVACType }} Auswahl</Label>
+                                  <Select v-model="selectedHVAC">
+                                    <SelectTrigger id="hvac-item-select">
+                                      <SelectValue placeholder="Wählen Sie spezifisches System..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem
+                                        v-for="item in getHVACOptions"
+                                        :key="item.hvac_number"
+                                        :value="item.hvac_number"
+                                      >
+                                        {{ item.hvac_name }}
+                                      </SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <SheetFooter class="mt-4 border-t pt-4 px-4">
+                          <div class="flex space-x-2 w-full">
+                            <Button 
+                              variant="outline" 
+                              @click="isSheetOpen = false"
+                              class="flex-1"
+                            >
+                              Abbrechen
+                            </Button>
+                            <Button 
+                              @click="saveRetrofitScenario"
+                              :disabled="!isConstructionComplete || !selectedHVAC || !constructionYear || !hvacYear"
+                              class="flex-1"
+                            >
+                              Szenario speichern
+                            </Button>
+                          </div>
+                        </SheetFooter>
+                      </SheetContent>
+                    </Sheet>
+                    
+                    <!-- Show hover card if scenario exists -->
+                    <div v-else>
+                      <!-- Modification Sheet -->
+                      <Sheet :open="isSheetOpen" @update:open="isSheetOpen = $event">
+                        <SheetContent side="right" class="!w-[480px] sm:!w-[650px] !max-w-none flex flex-col">
+                          <SheetHeader>
+                            <SheetTitle>Sanierungszenario bearbeiten</SheetTitle>
+                            <SheetDescription>
+                              Bearbeiten Sie die Konstruktions- und TGA-Maßnahmen für die Gebäudesanierung.
+                            </SheetDescription>
+                          </SheetHeader>
+                          
+                          <!-- Scrollable Content Area -->
+                          <div class="flex-1 overflow-y-auto py-4">
+                            <div class="space-y-6 px-4">
+                              <!-- Form Data Error -->
+                              <div v-if="formDataError" class="bg-red-50 border border-red-200 rounded-md p-3">
+                                <p class="text-sm text-red-600">{{ formDataError }}</p>
+                              </div>
+                              
+                              <!-- Loading state -->
+                              <div v-if="isLoadingFormData" class="space-y-4">
+                                <Skeleton class="h-4 w-full" />
+                                <Skeleton class="h-10 w-full" />
+                                <Skeleton class="h-4 w-full" />
+                                <Skeleton class="h-10 w-full" />
+                              </div>
+                              
+                              <!-- Form content -->
+                              <div v-else-if="formData" class="space-y-6">
+                                <!-- Construction Section -->
+                                <div class="space-y-4">
+                                  <div>
+                                    <h3 class="text-lg font-medium">
+                                      Konstruktion
+                                    </h3>
+                                    <p class="text-sm text-muted-foreground">Auswahl von 4 Konstruktionsmaßnahmen</p>
+                                  </div>
+                                  
+                                  <!-- Year Input for Construction -->
+                                  <div class="space-y-2">
+                                    <Label for="construction-year-modify">Sanierungsjahr Konstruktion</Label>
+                                    <Input
+                                      id="construction-year-modify"
+                                      v-model="constructionYear"
+                                      type="number"
+                                      placeholder="z.B. 2025"
+                                      :min="formData.year_ranges?.construction_retrofit_year?.min || 2024"
+                                      :max="formData.year_ranges?.construction_retrofit_year?.max || 2050"
+                                    />
+                                  </div>
+                                  
+                                  <!-- 4 Construction Type Selections -->
+                                  <div class="space-y-4">
+                                    <div v-for="constructionType in formData.construction_types" :key="constructionType" class="space-y-2">
+                                      <Label :for="`construction-${constructionType}-modify`" class="text-sm font-medium">{{ constructionType }}</Label>
+                                      <Select v-model="selectedConstructions[constructionType]">
+                                        <SelectTrigger :id="`construction-${constructionType}-modify`">
+                                          <SelectValue placeholder="Wählen Sie..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem
+                                            v-for="item in getConstructionOptions(constructionType)"
+                                            :key="item.construction_number"
+                                            :value="item.construction_number"
+                                          >
+                                            {{ item.construction_name }}
+                                          </SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  </div>
+                                </div>
+                                
+                                <Separator />
+                                
+                                <!-- HVAC Section -->
+                                <div class="space-y-4">
+                                  <div>
+                                    <h3 class="text-lg font-medium">
+                                      TGA (Technische Gebäudeausrüstung)
+                                    </h3>
+                                    <p class="text-sm text-muted-foreground">Auswahl der TGA-Maßnahmen</p>
+                                  </div>
+                                  
+                                  <!-- Year Input for HVAC -->
+                                  <div class="space-y-2">
+                                    <Label for="hvac-year-modify">Sanierungsjahr TGA</Label>
+                                    <Input
+                                      id="hvac-year-modify"
+                                      v-model="hvacYear"
+                                      type="number"
+                                      placeholder="z.B. 2025"
+                                      :min="formData.year_ranges?.hvac_retrofit_year?.min || 2024"
+                                      :max="formData.year_ranges?.hvac_retrofit_year?.max || 2050"
+                                    />
+                                  </div>
+                                  
+                                  <!-- HVAC Type Selection -->
+                                  <div class="space-y-2">
+                                    <Label for="hvac-type-select-modify">TGA-Typ</Label>
+                                    <Select v-model="selectedHVACType">
+                                      <SelectTrigger id="hvac-type-select-modify">
+                                        <SelectValue placeholder="Wählen Sie TGA-Typ..." />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem
+                                          v-for="hvacType in formData.hvac_types"
+                                          :key="hvacType"
+                                          :value="hvacType"
+                                        >
+                                          {{ hvacType }}
+                                        </SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  
+                                  <!-- Specific HVAC Selection -->
+                                  <div v-if="selectedHVACType" class="space-y-2">
+                                    <Label for="hvac-item-select-modify">{{ selectedHVACType }} Auswahl</Label>
+                                    <Select v-model="selectedHVAC">
+                                      <SelectTrigger id="hvac-item-select-modify">
+                                        <SelectValue placeholder="Wählen Sie spezifisches System..." />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem
+                                          v-for="item in getHVACOptions"
+                                          :key="item.hvac_number"
+                                          :value="item.hvac_number"
+                                        >
+                                          {{ item.hvac_name }}
+                                        </SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <SheetFooter class="mt-4 border-t pt-4 px-4">
+                            <div class="flex space-x-2 w-full">
+                              <Button 
+                                variant="outline" 
+                                @click="isSheetOpen = false"
+                                class="flex-1"
+                              >
+                                Abbrechen
+                              </Button>
+                              <Button 
+                                @click="saveRetrofitScenario"
+                                :disabled="!isConstructionComplete || !selectedHVAC || !constructionYear || !hvacYear"
+                                class="flex-1"
+                              >
+                                Änderungen speichern
+                              </Button>
+                            </div>
+                          </SheetFooter>
+                        </SheetContent>
+                      </Sheet>
+                    
+                      <!-- Hover Card Display -->
+                      <HoverCard>
+                        <div class="flex items-center space-x-2">
+                          <HoverCardTrigger as-child>
+                            <div class="bg-primary/10 border border-primary/20 rounded-lg p-3 cursor-help">
+                              <div class="flex items-center space-x-2">
+                                <Badge variant="default" class="text-xs">
+                                  Szenario aktiv
+                                </Badge>
+                              </div>
+                            </div>
+                          </HoverCardTrigger>
+                          
+                          <!-- Action buttons outside hover trigger -->
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            @click="modifyRetrofitScenario"
+                            class="h-8 w-8 p-0"
+                            title="Szenario bearbeiten"
+                          >
+                            <Settings class="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            @click="removeRetrofitScenario"
+                            class="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                            title="Szenario entfernen"
+                          >
+                            <X class="h-4 w-4" />
+                          </Button>
+                        </div>
+                        
+                        <HoverCardContent side="left" class="max-w-sm">
+                          <div class="space-y-2">
+                            <div class="font-medium">Sanierungszenario</div>
+                            <div class="space-y-1 text-xs">
+                              <div>
+                                <span class="font-medium">Konstruktion ({{ retrofitScenario.construction_year }}):</span>
+                              </div>
+                              <div class="pl-2 text-muted-foreground">
+                                {{ constructionSummary }}
+                              </div>
+                              <div>
+                                <span class="font-medium">TGA ({{ retrofitScenario.hvac_year }}):</span> {{ retrofitScenario.hvac.hvac_name }}
+                              </div>
+                            </div>
+                          </div>
+                        </HoverCardContent>
+                      </HoverCard>
+                    </div>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent class="h-full overflow-y-auto">
                 <!-- Loading state for building info -->
