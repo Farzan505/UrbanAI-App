@@ -14,6 +14,8 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/h
 import { Badge } from '@/components/ui/badge'
 import ArcGISSceneViewer from '@/components/map/ArcGISSceneViewer.vue'
 import { Plus, Settings, X } from 'lucide-vue-next'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
+import { toast } from 'vue-sonner'
 
 // Router
 const route = useRoute()
@@ -44,6 +46,17 @@ const isLoadingFormData = ref(false)
 const formDataError = ref('')
 const formData = ref<FormDataResponse | null>(null)
 const retrofitScenario = ref<RetrofitScenario | null>(null)
+const isDeleteDialogOpen = ref(false)
+
+// Store for undo functionality
+const deletedScenario = ref<RetrofitScenario | null>(null)
+const deletedFormState = ref<{
+  selectedConstructions: {[key: string]: string}
+  selectedHVACType: string
+  selectedHVAC: string
+  constructionYear: string
+  hvacYear: string
+} | null>(null)
 
 // Form state for construction (4 types)
 const selectedConstructions = ref<{[key: string]: string}>({
@@ -379,6 +392,17 @@ const saveRetrofitScenario = () => {
 
 // Handle canceling/removing retrofit scenario
 const removeRetrofitScenario = () => {
+  // Store current state for undo
+  deletedScenario.value = { ...retrofitScenario.value! }
+  deletedFormState.value = {
+    selectedConstructions: { ...selectedConstructions.value },
+    selectedHVACType: selectedHVACType.value,
+    selectedHVAC: selectedHVAC.value,
+    constructionYear: constructionYear.value,
+    hvacYear: hvacYear.value
+  }
+  
+  // Clear current scenario
   retrofitScenario.value = null
   selectedConstructions.value = {
     'Außenwand': '',
@@ -390,6 +414,48 @@ const removeRetrofitScenario = () => {
   selectedHVAC.value = ''
   constructionYear.value = ''
   hvacYear.value = ''
+  
+  // Close dialog
+  isDeleteDialogOpen.value = false
+  
+  // Show toast with undo option
+  toast('Sanierungszenario gelöscht', {
+    description: 'Das Sanierungszenario wurde erfolgreich entfernt.',
+    action: {
+      label: 'Rückgängig',
+      onClick: () => undoDeleteScenario()
+    },
+    duration: 5000
+  })
+}
+
+// Undo delete scenario
+const undoDeleteScenario = () => {
+  if (deletedScenario.value && deletedFormState.value) {
+    // Restore scenario
+    retrofitScenario.value = deletedScenario.value
+    
+    // Restore form state
+    selectedConstructions.value = deletedFormState.value.selectedConstructions
+    selectedHVACType.value = deletedFormState.value.selectedHVACType
+    selectedHVAC.value = deletedFormState.value.selectedHVAC
+    constructionYear.value = deletedFormState.value.constructionYear
+    hvacYear.value = deletedFormState.value.hvacYear
+    
+    // Clear undo data
+    deletedScenario.value = null
+    deletedFormState.value = null
+    
+    // Show success toast
+    toast.success('Sanierungszenario wiederhergestellt', {
+      description: 'Das Sanierungszenario wurde erfolgreich wiederhergestellt.'
+    })
+  }
+}
+
+// Handle delete button click (opens confirmation dialog)
+const handleDeleteClick = () => {
+  isDeleteDialogOpen.value = true
 }
 
 // Handle modifying existing scenario
@@ -853,15 +919,40 @@ const modifyRetrofitScenario = () => {
                           >
                             <Settings class="h-4 w-4" />
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            @click="removeRetrofitScenario"
-                            class="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                            title="Szenario entfernen"
-                          >
-                            <X class="h-4 w-4" />
-                          </Button>
+                          
+                          <!-- Delete button with confirmation dialog -->
+                          <AlertDialog :open="isDeleteDialogOpen" @update:open="isDeleteDialogOpen = $event">
+                            <AlertDialogTrigger as-child>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                @click="handleDeleteClick"
+                                class="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                                title="Szenario entfernen"
+                              >
+                                <X class="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Sanierungszenario löschen?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Sind Sie sicher, dass Sie dieses Sanierungszenario löschen möchten? 
+                                  Diese Aktion kann rückgängig gemacht werden.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                                <AlertDialogAction
+                                  @click="removeRetrofitScenario"
+                                  class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  Löschen
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
                         </div>
                         
                         <HoverCardContent side="left" class="max-w-sm">
@@ -896,18 +987,7 @@ const modifyRetrofitScenario = () => {
                 
                 <!-- Building information content -->
                 <div v-else>
-                  <!-- Debug info -->
-                  <div class="mb-4 p-2 bg-blue-50 rounded text-xs">
-                    <p>Debug: buildingData exists: {{ !!buildingData }}</p>
-                    <p>Debug: buildings_assumptions exists: {{ !!buildingData?.buildings_assumptions }}</p>
-                    <p v-if="buildingData?.buildings_assumptions">
-                      Debug: GEBID: {{ buildingData.buildings_assumptions.gebid }}
-                    </p>
-                    <p>Debug: Keys in buildingData: {{ buildingData ? Object.keys(buildingData) : 'none' }}</p>
-                    <p v-if="buildingData?.buildings_assumptions">
-                      Debug: Keys in buildings_assumptions: {{ Object.keys(buildingData.buildings_assumptions) }}
-                    </p>
-                  </div>
+
                   
                   <Accordion type="single" collapsible class="w-full" default-value="building-info">
                     <!-- Building Assumptions -->
