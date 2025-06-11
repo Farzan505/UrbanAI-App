@@ -59,23 +59,26 @@ const formData = ref<FormDataResponse | null>(null)
 const retrofitScenario = ref<RetrofitScenario | null>(null)
 const isDeleteDialogOpen = ref(false)
 
+// Energy standards state
+const isLoadingEnergyStandards = ref(false)
+const energyStandardsError = ref('')
+const energyStandards = ref<EnergyStandardsResponse | null>(null)
+
+// Construction details state
+const isConstructionDetailsOpen = ref(false)
+
 // Store for undo functionality
 const deletedScenario = ref<RetrofitScenario | null>(null)
 const deletedFormState = ref<{
-  selectedConstructions: {[key: string]: string}
+  selectedEnergyStandard: string
   selectedHVACType: string
   selectedHVAC: string
   constructionYear: string
   hvacYear: string
 } | null>(null)
 
-// Form state for construction (4 types)
-const selectedConstructions = ref<{[key: string]: string}>({
-  'Außenwand': '',
-  'Boden': '',
-  'Dach': '',
-  'Fenster': ''
-})
+// Form state for energy standards (replaces construction details)
+const selectedEnergyStandard = ref<string>('')
 const constructionYear = ref<string>('')
 
 // Form state for HVAC
@@ -161,22 +164,30 @@ interface FormDataResponse {
   }
 }
 
+// Interface for energy standards response
+interface EnergyStandardsResponse {
+  status: string
+  is_heritage: boolean
+  standards: string[]
+  description: string
+  count: number
+}
+
 // Interface for retrofit scenario
 interface RetrofitScenario {
-  construction: {
-    [constructionType: string]: {
-      construction_number: string
-      construction_name: string
-      construction_type: string
-    }
-  }
-  construction_year: string
+  energy_standard: {
+    id: string
+    name: string
+    description?: string
+    [key: string]: any
+  } | null
+  construction_year: string | null
   hvac: {
     hvac_number: string
     hvac_name: string
     hvac_type: string
-  }
-  hvac_year: string
+  } | null
+  hvac_year: string | null
 }
 
 // Search for building by GEBID
@@ -393,15 +404,7 @@ const fetchFormData = async () => {
     
     formData.value = data
     
-    // Set default years if available
-    if (data.year_ranges) {
-      if (!constructionYear.value) {
-        constructionYear.value = data.year_ranges.construction_retrofit_year.default.toString()
-      }
-      if (!hvacYear.value) {
-        hvacYear.value = data.year_ranges.hvac_retrofit_year.default.toString()
-      }
-    }
+    // Note: Years are intentionally left empty for user input
     
   } catch (err) {
     formDataError.value = `Failed to fetch form data: ${err instanceof Error ? err.message : 'Unknown error'}`
@@ -411,10 +414,44 @@ const fetchFormData = async () => {
   }
 }
 
+// Fetch energy standards based on heritage status
+const fetchEnergyStandards = async () => {
+  if (energyStandards.value) return // Already loaded
+
+  isLoadingEnergyStandards.value = true
+  energyStandardsError.value = ''
+  
+  try {
+    const isHeritage = buildingData.value?.buildings_assumptions?.is_heritage || false
+    console.log('🏛️ Heritage status:', isHeritage)
+    console.log('🏛️ Building data assumptions:', buildingData.value?.buildings_assumptions)
+    
+    const response = await fetch(`${apiBaseUrl.value}/api/database/get_energy_standards?heritage=${isHeritage}`)
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    const data: EnergyStandardsResponse = await response.json()
+    console.log('🏛️ Energy standards response:', data)
+    
+    energyStandards.value = data
+    
+  } catch (err) {
+    energyStandardsError.value = `Failed to fetch energy standards: ${err instanceof Error ? err.message : 'Unknown error'}`
+    console.error('❌ Energy standards fetch error:', err)
+  } finally {
+    isLoadingEnergyStandards.value = false
+  }
+}
+
 // Handle opening retrofit scenario sheet
 const openRetrofitSheet = () => {
   try {
     isSheetOpen.value = true
+    fetchEnergyStandards().catch(err => {
+      console.error('Error fetching energy standards:', err)
+    })
     fetchFormData().catch(err => {
       console.error('Error fetching form data:', err)
     })
@@ -430,6 +467,57 @@ const isConstructionComplete = computed(() => {
   } catch (err) {
     console.error('Error in isConstructionComplete computed:', err)
     return false
+  }
+})
+
+// Check if energy standard is selected
+const isEnergyStandardSelected = computed(() => {
+  try {
+    return selectedEnergyStandard.value !== ''
+  } catch (err) {
+    console.error('Error in isEnergyStandardSelected computed:', err)
+    return false
+  }
+})
+
+// Check if HVAC is selected
+const isHVACSelected = computed(() => {
+  try {
+    return selectedHVAC.value !== ''
+  } catch (err) {
+    console.error('Error in isHVACSelected computed:', err)
+    return false
+  }
+})
+
+// Check if at least one section is complete with its year
+const isScenarioValid = computed(() => {
+  try {
+    const hasConstruction = isEnergyStandardSelected.value && constructionYear.value !== ''
+    const hasHVAC = isHVACSelected.value && hvacYear.value !== ''
+    return hasConstruction || hasHVAC
+  } catch (err) {
+    console.error('Error in isScenarioValid computed:', err)
+    return false
+  }
+})
+
+// Get validation message for save button
+const getValidationMessage = computed(() => {
+  try {
+    if (!isEnergyStandardSelected.value && !isHVACSelected.value) {
+      return 'Bitte wählen Sie mindestens einen Energiestandard oder eine TGA-Maßnahme'
+    }
+    if (isEnergyStandardSelected.value && !constructionYear.value) {
+      return 'Bitte geben Sie das Sanierungsjahr für die Konstruktion ein'
+    }
+    if (isHVACSelected.value && !hvacYear.value) {
+      return 'Bitte geben Sie das Sanierungsjahr für die TGA ein'
+    }
+    return ''
+  } catch (err) {
+    console.error('Error in getValidationMessage computed:', err)
+    return 'Validierungsfehler'
   }
 })
 
@@ -460,10 +548,7 @@ const constructionSummary = computed(() => {
   try {
     if (!retrofitScenario.value) return ''
     
-    const constructionTypes = Object.keys(retrofitScenario.value.construction)
-    if (constructionTypes.length === 0) return 'Keine Auswahl'
-    
-    return constructionTypes.join(', ')
+    return retrofitScenario.value.energy_standard?.name || 'Keine Auswahl'
   } catch (err) {
     console.error('Error in constructionSummary computed:', err)
     return 'Fehler bei der Zusammenfassung'
@@ -536,37 +621,64 @@ const buildingSurfaceAreas = computed(() => {
 // Handle saving retrofit scenario
 const saveRetrofitScenario = () => {
   try {
-    if (!isConstructionComplete.value || !selectedHVAC.value || !constructionYear.value || !hvacYear.value) {
-      return // Validation failed
+    if (!isScenarioValid.value) {
+      // Show validation error
+      const message = getValidationMessage.value
+      if (message) {
+        try {
+          toast.error('Validierungsfehler', {
+            description: message
+          })
+        } catch (toastErr) {
+          console.error('Error showing validation toast:', toastErr)
+        }
+      }
+      return
     }
 
-    const constructionData: {[key: string]: any} = {}
-    
-    // Build construction data object
-    Object.keys(selectedConstructions.value).forEach(constructionType => {
-      const selectedNumber = selectedConstructions.value[constructionType]
-      const constructionItem = formData.value?.construction_samples[constructionType]?.find(
-        item => item.construction_number === selectedNumber
-      )
-      if (constructionItem) {
-        constructionData[constructionType] = constructionItem
-      }
-    })
+    let energyStandardData = null
+    let hvacData = null
 
-    const hvacItem = getHVACOptions.value.find(item => item.hvac_number === selectedHVAC.value)
-    if (!hvacItem) return
+    // Handle energy standard if selected
+    if (isEnergyStandardSelected.value && constructionYear.value) {
+      const selectedStandardName = selectedEnergyStandard.value
+      if (energyStandards.value?.standards.includes(selectedStandardName)) {
+        energyStandardData = {
+          id: selectedStandardName,
+          name: selectedStandardName,
+          description: energyStandards.value.description
+        }
+      }
+    }
+
+    // Handle HVAC if selected
+    if (isHVACSelected.value && hvacYear.value) {
+      const hvacItem = getHVACOptions.value.find(item => item.hvac_number === selectedHVAC.value)
+      if (hvacItem) {
+        hvacData = hvacItem
+      }
+    }
 
     retrofitScenario.value = {
-      construction: constructionData,
-      construction_year: constructionYear.value,
-      hvac: hvacItem,
-      hvac_year: hvacYear.value
+      energy_standard: energyStandardData,
+      construction_year: constructionYear.value || null,
+      hvac: hvacData,
+      hvac_year: hvacYear.value || null
     }
 
     isSheetOpen.value = false
     
     // TODO: Send to backend for calculation and storing
     console.log('Saved retrofit scenario:', retrofitScenario.value)
+    
+    // Show success message
+    try {
+      toast.success('Sanierungszenario gespeichert', {
+        description: 'Das Sanierungszenario wurde erfolgreich erstellt.'
+      })
+    } catch (toastErr) {
+      console.error('Error showing success toast:', toastErr)
+    }
   } catch (err) {
     console.error('Error saving retrofit scenario:', err)
     // Show error toast if possible
@@ -586,7 +698,7 @@ const removeRetrofitScenario = () => {
     // Store current state for undo
     deletedScenario.value = { ...retrofitScenario.value! }
     deletedFormState.value = {
-      selectedConstructions: { ...selectedConstructions.value },
+      selectedEnergyStandard: selectedEnergyStandard.value,
       selectedHVACType: selectedHVACType.value,
       selectedHVAC: selectedHVAC.value,
       constructionYear: constructionYear.value,
@@ -595,12 +707,7 @@ const removeRetrofitScenario = () => {
     
     // Clear current scenario
     retrofitScenario.value = null
-    selectedConstructions.value = {
-      'Außenwand': '',
-      'Boden': '',
-      'Dach': '',
-      'Fenster': ''
-    }
+    selectedEnergyStandard.value = ''
     selectedHVACType.value = ''
     selectedHVAC.value = ''
     constructionYear.value = ''
@@ -635,7 +742,7 @@ const undoDeleteScenario = () => {
       retrofitScenario.value = deletedScenario.value
       
       // Restore form state
-      selectedConstructions.value = deletedFormState.value.selectedConstructions
+      selectedEnergyStandard.value = deletedFormState.value.selectedEnergyStandard
       selectedHVACType.value = deletedFormState.value.selectedHVACType
       selectedHVAC.value = deletedFormState.value.selectedHVAC
       constructionYear.value = deletedFormState.value.constructionYear
@@ -680,18 +787,19 @@ const formatDisplayValue = (value: any) => {
 const modifyRetrofitScenario = () => {
   try {
     if (retrofitScenario.value) {
-      // Restore construction selections
-      Object.keys(retrofitScenario.value.construction).forEach(constructionType => {
-        selectedConstructions.value[constructionType] = retrofitScenario.value!.construction[constructionType].construction_number
-      })
-      constructionYear.value = retrofitScenario.value.construction_year
+      // Restore energy standard selection
+      selectedEnergyStandard.value = retrofitScenario.value.energy_standard?.name || ''
+      constructionYear.value = retrofitScenario.value.construction_year || ''
       
       // Restore HVAC selections
-      selectedHVACType.value = retrofitScenario.value.hvac.hvac_type
-      selectedHVAC.value = retrofitScenario.value.hvac.hvac_number
-      hvacYear.value = retrofitScenario.value.hvac_year
+      selectedHVACType.value = retrofitScenario.value.hvac?.hvac_type || ''
+      selectedHVAC.value = retrofitScenario.value.hvac?.hvac_number || ''
+      hvacYear.value = retrofitScenario.value.hvac_year || ''
     }
     isSheetOpen.value = true
+    fetchEnergyStandards().catch(err => {
+      console.error('Error fetching energy standards:', err)
+    })
     fetchFormData().catch(err => {
       console.error('Error fetching form data:', err)
     })
@@ -832,9 +940,9 @@ const modifyRetrofitScenario = () => {
                               <div class="space-y-4">
                                 <div>
                                   <h3 class="text-lg font-medium">
-                                    Konstruktion
+                                    Energiestandard
                                   </h3>
-                                  <p class="text-sm text-muted-foreground">Auswahl von 4 Konstruktionsmaßnahmen</p>
+                                  <p class="text-sm text-muted-foreground">Auswahl des Energiestandards für die Sanierung</p>
                                 </div>
                                 
                                 <!-- Year Input for Construction -->
@@ -850,25 +958,35 @@ const modifyRetrofitScenario = () => {
                                   />
                                 </div>
                                 
-                                <!-- 4 Construction Type Selections -->
-                                <div class="space-y-4">
-                                  <div v-for="constructionType in formData.construction_types" :key="constructionType" class="space-y-2">
-                                    <Label :for="`construction-${constructionType}`" class="text-sm font-medium">{{ constructionType }}</Label>
-                                    <Select v-model="selectedConstructions[constructionType]">
-                                      <SelectTrigger :id="`construction-${constructionType}`">
-                                        <SelectValue placeholder="Wählen Sie..." />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem
-                                          v-for="item in getConstructionOptions(constructionType)"
-                                          :key="item.construction_number"
-                                          :value="item.construction_number"
-                                        >
-                                          {{ item.construction_name }}
-                                        </SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
+                                <!-- Energy Standards Error -->
+                                <div v-if="energyStandardsError" class="bg-red-50 border border-red-200 rounded-md p-3">
+                                  <p class="text-sm text-red-600">{{ energyStandardsError }}</p>
+                                </div>
+                                
+                                <!-- Energy Standards Selection -->
+                                <div v-if="isLoadingEnergyStandards" class="space-y-2">
+                                  <Skeleton class="h-4 w-full" />
+                                  <Skeleton class="h-10 w-full" />
+                                </div>
+                                <div v-else-if="energyStandards" class="space-y-2">
+                                  <Label for="energy-standard-select">Energiestandard</Label>
+                                  <Select v-model="selectedEnergyStandard">
+                                    <SelectTrigger id="energy-standard-select">
+                                      <SelectValue placeholder="Wählen Sie einen Energiestandard..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem
+                                        v-for="standard in energyStandards.standards"
+                                        :key="standard"
+                                        :value="standard"
+                                      >
+                                        {{ standard }}
+                                      </SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                  <p v-if="energyStandards.description" class="text-xs text-muted-foreground">
+                                    {{ energyStandards.description }}
+                                  </p>
                                 </div>
                               </div>
                               
@@ -947,13 +1065,18 @@ const modifyRetrofitScenario = () => {
                             >
                               Abbrechen
                             </Button>
-                            <Button 
-                              @click="saveRetrofitScenario"
-                              :disabled="!isConstructionComplete || !selectedHVAC || !constructionYear || !hvacYear"
-                              class="flex-1"
-                            >
-                              Szenario speichern
-                            </Button>
+                            <div class="flex-1">
+                              <Button 
+                                @click="saveRetrofitScenario"
+                                :disabled="!isScenarioValid"
+                                class="w-full"
+                              >
+                                Szenario speichern
+                              </Button>
+                              <p v-if="!isScenarioValid && getValidationMessage" class="text-xs text-red-500 mt-1">
+                                {{ getValidationMessage }}
+                              </p>
+                            </div>
                           </div>
                         </SheetFooter>
                       </SheetContent>
@@ -993,9 +1116,9 @@ const modifyRetrofitScenario = () => {
                                 <div class="space-y-4">
                                   <div>
                                     <h3 class="text-lg font-medium">
-                                      Konstruktion
+                                      Energiestandard
                                     </h3>
-                                    <p class="text-sm text-muted-foreground">Auswahl von 4 Konstruktionsmaßnahmen</p>
+                                    <p class="text-sm text-muted-foreground">Auswahl des Energiestandards für die Sanierung</p>
                                   </div>
                                   
                                   <!-- Year Input for Construction -->
@@ -1011,25 +1134,35 @@ const modifyRetrofitScenario = () => {
                                     />
                                   </div>
                                   
-                                  <!-- 4 Construction Type Selections -->
-                                  <div class="space-y-4">
-                                    <div v-for="constructionType in formData.construction_types" :key="constructionType" class="space-y-2">
-                                      <Label :for="`construction-${constructionType}-modify`" class="text-sm font-medium">{{ constructionType }}</Label>
-                                      <Select v-model="selectedConstructions[constructionType]">
-                                        <SelectTrigger :id="`construction-${constructionType}-modify`">
-                                          <SelectValue placeholder="Wählen Sie..." />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem
-                                            v-for="item in getConstructionOptions(constructionType)"
-                                            :key="item.construction_number"
-                                            :value="item.construction_number"
-                                          >
-                                            {{ item.construction_name }}
-                                          </SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
+                                  <!-- Energy Standards Error -->
+                                  <div v-if="energyStandardsError" class="bg-red-50 border border-red-200 rounded-md p-3">
+                                    <p class="text-sm text-red-600">{{ energyStandardsError }}</p>
+                                  </div>
+                                  
+                                  <!-- Energy Standards Selection -->
+                                  <div v-if="isLoadingEnergyStandards" class="space-y-2">
+                                    <Skeleton class="h-4 w-full" />
+                                    <Skeleton class="h-10 w-full" />
+                                  </div>
+                                  <div v-else-if="energyStandards" class="space-y-2">
+                                    <Label for="energy-standard-select-modify">Energiestandard</Label>
+                                    <Select v-model="selectedEnergyStandard">
+                                      <SelectTrigger id="energy-standard-select-modify">
+                                        <SelectValue placeholder="Wählen Sie einen Energiestandard..." />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem
+                                          v-for="standard in energyStandards.standards"
+                                          :key="standard"
+                                          :value="standard"
+                                        >
+                                          {{ standard }}
+                                        </SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                    <p v-if="energyStandards.description" class="text-xs text-muted-foreground">
+                                      {{ energyStandards.description }}
+                                    </p>
                                   </div>
                                 </div>
                                 
@@ -1110,7 +1243,7 @@ const modifyRetrofitScenario = () => {
                               </Button>
                               <Button 
                                 @click="saveRetrofitScenario"
-                                :disabled="!isConstructionComplete || !selectedHVAC || !constructionYear || !hvacYear"
+                                :disabled="!isScenarioValid"
                                 class="flex-1"
                               >
                                 Änderungen speichern
@@ -1183,14 +1316,17 @@ const modifyRetrofitScenario = () => {
                           <div class="space-y-2">
                             <div class="font-medium">Sanierungszenario</div>
                             <div class="space-y-1 text-xs">
-                              <div>
-                                <span class="font-medium">Konstruktion ({{ retrofitScenario.construction_year }}):</span>
+                              <div v-if="retrofitScenario.energy_standard && retrofitScenario.construction_year">
+                                <span class="font-medium">Energiestandard ({{ retrofitScenario.construction_year }}):</span>
+                                <div class="pl-2 text-muted-foreground">
+                                  {{ constructionSummary }}
+                                </div>
                               </div>
-                              <div class="pl-2 text-muted-foreground">
-                                {{ constructionSummary }}
-                              </div>
-                              <div>
+                              <div v-if="retrofitScenario.hvac && retrofitScenario.hvac_year">
                                 <span class="font-medium">TGA ({{ retrofitScenario.hvac_year }}):</span> {{ retrofitScenario.hvac.hvac_name }}
+                              </div>
+                              <div v-if="!retrofitScenario.energy_standard && !retrofitScenario.hvac" class="text-muted-foreground">
+                                Keine Maßnahmen ausgewählt
                               </div>
                             </div>
                           </div>
@@ -1423,6 +1559,88 @@ const modifyRetrofitScenario = () => {
               <p class="text-xs text-muted-foreground mt-1">€/m²·a</p>
             </CardContent>
           </Card>
+        </div>
+        
+        <!-- Construction Details Button -->
+        <div class="flex justify-center mt-6">
+          <Sheet :open="isConstructionDetailsOpen" @update:open="isConstructionDetailsOpen = $event">
+            <SheetTrigger as-child>
+              <Button variant="outline" class="flex items-center space-x-2">
+                <Settings class="h-4 w-4" />
+                <span>Konstruktionsdetails anzeigen</span>
+              </Button>
+            </SheetTrigger>
+            
+            <SheetContent side="right" class="!w-[480px] sm:!w-[650px] !max-w-none flex flex-col">
+              <SheetHeader>
+                <SheetTitle>Konstruktionsdetails</SheetTitle>
+                <SheetDescription>
+                  Detaillierte Auswahl der Konstruktionsmaßnahmen für die Gebäudesanierung.
+                </SheetDescription>
+              </SheetHeader>
+              
+              <!-- Scrollable Content Area -->
+              <div class="flex-1 overflow-y-auto py-4">
+                <div class="space-y-6 px-4">
+                  <!-- Form Data Error -->
+                  <div v-if="formDataError" class="bg-red-50 border border-red-200 rounded-md p-3">
+                    <p class="text-sm text-red-600">{{ formDataError }}</p>
+                  </div>
+                  
+                  <!-- Loading state -->
+                  <div v-if="isLoadingFormData" class="space-y-4">
+                    <Skeleton class="h-4 w-full" />
+                    <Skeleton class="h-10 w-full" />
+                    <Skeleton class="h-4 w-full" />
+                    <Skeleton class="h-10 w-full" />
+                  </div>
+                  
+                  <!-- Construction details content -->
+                  <div v-else-if="formData" class="space-y-6">
+                    <div class="space-y-4">
+                      <div>
+                        <h3 class="text-lg font-medium">
+                          Konstruktionsauswahl
+                        </h3>
+                        <p class="text-sm text-muted-foreground">Detaillierte Auswahl von 4 Konstruktionsmaßnahmen</p>
+                      </div>
+                      
+                      <!-- 4 Construction Type Selections -->
+                      <div class="space-y-4">
+                        <div v-for="constructionType in formData.construction_types" :key="constructionType" class="space-y-2">
+                          <Label :for="`construction-details-${constructionType}`" class="text-sm font-medium">{{ constructionType }}</Label>
+                          <Select>
+                            <SelectTrigger :id="`construction-details-${constructionType}`">
+                              <SelectValue placeholder="Wählen Sie..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem
+                                v-for="item in getConstructionOptions(constructionType)"
+                                :key="item.construction_number"
+                                :value="item.construction_number"
+                              >
+                                {{ item.construction_name }}
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <SheetFooter class="mt-4 border-t pt-4 px-4">
+                <Button 
+                  variant="outline" 
+                  @click="isConstructionDetailsOpen = false"
+                  class="w-full"
+                >
+                  Schließen
+                </Button>
+              </SheetFooter>
+            </SheetContent>
+          </Sheet>
         </div>
       </div>
     </main>
