@@ -48,6 +48,45 @@ let currentData: { adiabaticData: any, shadingData: any } | null = null
 // Color palette for different property values (from original HTML)
 const colors = ["#fc3e5aff", "#fce138ff", "#4c81cdff", "#f1983cff", "#48885cff", "#a553b7ff", "#fff799ff", "#b1a9d0ff", "#6ecffcff", "#fc6f84ff", "#6af689ff", "#fcd27eff"]
 
+// Function to calculate if a ring is clockwise or counter-clockwise
+const isClockwise = (ring: number[][]) => {
+  let sum = 0
+  for (let i = 0; i < ring.length - 1; i++) {
+    sum += (ring[i + 1][0] - ring[i][0]) * (ring[i + 1][1] + ring[i][1])
+  }
+  return sum > 0
+}
+
+// Function to reverse a ring's direction
+const reverseRing = (ring: number[][]) => {
+  return [...ring].reverse()
+}
+
+// Function to fix ring orientation for ArcGIS
+// ArcGIS expects: exterior rings clockwise, holes counter-clockwise
+// GeoJSON has: exterior rings counter-clockwise, holes clockwise
+const fixRingOrientation = (rings: number[][][]) => {
+  return rings.map((ring, index) => {
+    const ringIsClockwise = isClockwise(ring)
+    
+    if (index === 0) {
+      // Exterior ring should be clockwise for ArcGIS
+      if (!ringIsClockwise) {
+        console.log(`🔄 Reversing exterior ring to make it clockwise`)
+        return reverseRing(ring)
+      }
+    } else {
+      // Interior rings (holes) should be counter-clockwise for ArcGIS
+      if (ringIsClockwise) {
+        console.log(`🔄 Reversing interior ring ${index} to make it counter-clockwise`)
+        return reverseRing(ring)
+      }
+    }
+    
+    return ring
+  })
+}
+
 // API Response interfaces
 interface GeometryResponse {
   [key: string]: any // Allow dynamic keys since the structure is nested
@@ -169,21 +208,45 @@ const processGeometryData = async (data: GeometryResponse) => {
     // Add shading surfaces (always visible)
     if (shadingData && shadingData.features && shadingData.features.length > 0) {
       console.log('Processing shading surfaces...')
-      const shadingFeatures = shadingData.features.map((feature: any, index: number) => {
-        console.log('Processing shading feature:', index, feature.geometry)
-        
-        return {
-          geometry: {
-            type: "polygon",
-            rings: feature.geometry.coordinates,
-            spatialReference: { wkid: 4326 }
-          },
-          attributes: {
-            ObjectID: index,
-            ...feature.properties
-          }
+      const shadingFeatures = shadingData.features.map((feature: any, index: number) => ({
+        geometry: {
+          type: "polygon",
+          rings: (() => {
+            let rings = feature.geometry.coordinates
+            if (feature.geometry.type === 'Polygon') {
+              rings = feature.geometry.coordinates
+              console.log(`🔍 Polygon ${index} coordinates structure:`, {
+                type: feature.geometry.type,
+                coordinatesLength: feature.geometry.coordinates.length,
+                firstRingLength: feature.geometry.coordinates[0]?.length,
+                allRings: feature.geometry.coordinates.map((ring: any, ringIndex: number) => ({
+                  ringIndex,
+                  ringLength: ring.length,
+                  firstCoord: ring[0],
+                  lastCoord: ring[ring.length - 1]
+                }))
+              })
+              if (rings.length > 1) {
+                console.log(`🕳️ Shading Polygon ${index} has ${rings.length - 1} interior ring(s) (holes)`)
+                console.log(`🕳️ Interior rings:`, rings.slice(1))
+              }
+            } else if (feature.geometry.type === 'MultiPolygon') {
+              rings = feature.geometry.coordinates.flat()
+              console.log(`🔗 Shading MultiPolygon ${index} flattened to ${rings.length} rings`)
+            }
+            
+            // Fix ring orientation for ArcGIS
+            rings = fixRingOrientation(rings)
+            
+            return rings
+          })(),
+          spatialReference: { wkid: 4326 }
+        },
+        attributes: {
+          ObjectID: index,
+          ...feature.properties
         }
-      })
+      }))
 
       try {
         const shadingLayer = new FeatureLayer({
@@ -246,10 +309,48 @@ const processGeometryData = async (data: GeometryResponse) => {
       const adiabaticFeatures = adiabaticData.features.map((feature: any, index: number) => {
         console.log('Processing adiabatic feature:', index, feature.geometry)
         
+        // Handle GeoJSON polygon coordinates properly
+        let rings = feature.geometry.coordinates
+        if (feature.geometry.type === 'Polygon') {
+          rings = feature.geometry.coordinates
+          console.log(`🔍 Property Polygon ${index} coordinates structure:`, {
+            type: feature.geometry.type,
+            coordinatesLength: feature.geometry.coordinates.length,
+            firstRingLength: feature.geometry.coordinates[0]?.length,
+            allRings: feature.geometry.coordinates.map((ring: any, ringIndex: number) => ({
+              ringIndex,
+              ringLength: ring.length,
+              firstCoord: ring[0],
+              lastCoord: ring[ring.length - 1]
+            }))
+          })
+          if (rings.length > 1) {
+            console.log(`🕳️ Property Adiabatic Polygon ${index} has ${rings.length - 1} interior ring(s) (holes)`)
+            console.log(`🕳️ Interior rings:`, rings.slice(1))
+          }
+        } else if (feature.geometry.type === 'MultiPolygon') {
+          rings = feature.geometry.coordinates.flat()
+          console.log(`🔗 Property Adiabatic MultiPolygon ${index} flattened to ${rings.length} rings`)
+        }
+        
+        // Fix ring orientation for ArcGIS
+        rings = fixRingOrientation(rings)
+        
+        console.log(`📐 Final rings for adiabatic feature ${index}:`, {
+          ringsCount: rings.length,
+          rings: rings.map((ring: any, ringIndex: number) => ({
+            ringIndex,
+            pointCount: ring.length,
+            isHole: ringIndex > 0,
+            firstPoint: ring[0],
+            lastPoint: ring[ring.length - 1]
+          }))
+        })
+        
         return {
           geometry: {
             type: "polygon",
-            rings: feature.geometry.coordinates,
+            rings: rings,
             spatialReference: { wkid: 4326 }
           },
           attributes: {
@@ -474,7 +575,35 @@ const visualizeByProperty = (selectedProperty: string) => {
       const shadingFeatures = shadingData.features.map((feature: any, index: number) => ({
         geometry: {
           type: "polygon",
-          rings: feature.geometry.coordinates,
+          rings: (() => {
+            let rings = feature.geometry.coordinates
+            if (feature.geometry.type === 'Polygon') {
+              rings = feature.geometry.coordinates
+              console.log(`🔍 Polygon ${index} coordinates structure:`, {
+                type: feature.geometry.type,
+                coordinatesLength: feature.geometry.coordinates.length,
+                firstRingLength: feature.geometry.coordinates[0]?.length,
+                allRings: feature.geometry.coordinates.map((ring: any, ringIndex: number) => ({
+                  ringIndex,
+                  ringLength: ring.length,
+                  firstCoord: ring[0],
+                  lastCoord: ring[ring.length - 1]
+                }))
+              })
+              if (rings.length > 1) {
+                console.log(`🕳️ Shading Polygon ${index} has ${rings.length - 1} interior ring(s) (holes)`)
+                console.log(`🕳️ Interior rings:`, rings.slice(1))
+              }
+            } else if (feature.geometry.type === 'MultiPolygon') {
+              rings = feature.geometry.coordinates.flat()
+              console.log(`🔗 Shading MultiPolygon ${index} flattened to ${rings.length} rings`)
+            }
+            
+            // Fix ring orientation for ArcGIS
+            rings = fixRingOrientation(rings)
+            
+            return rings
+          })(),
           spatialReference: { wkid: 4326 }
         },
         attributes: {
@@ -533,7 +662,19 @@ const visualizeByProperty = (selectedProperty: string) => {
       const features = adiabaticData.features.map((feature: any, index: number) => ({
         geometry: {
           type: "polygon",
-          rings: feature.geometry.coordinates,
+          rings: (() => {
+            let rings = feature.geometry.coordinates
+            if (feature.geometry.type === 'Polygon') {
+              rings = feature.geometry.coordinates
+            } else if (feature.geometry.type === 'MultiPolygon') {
+              rings = feature.geometry.coordinates.flat()
+            }
+            
+            // Fix ring orientation for ArcGIS
+            rings = fixRingOrientation(rings)
+            
+            return rings
+          })(),
           spatialReference: { wkid: 4326 }
         },
         attributes: {
