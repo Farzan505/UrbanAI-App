@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { Button } from '@/components/ui/button'
@@ -12,13 +12,41 @@ const gebidSearch = ref('')
 
 // Check if current route should show search
 const showSearch = computed(() => {
-  return route.name === 'home' || route.name === 'gebid'
+  return route.name === 'home' || 
+         route.name === 'gebid' || 
+         route.name === 'building-analysis' || 
+         route.name === 'building-analysis-gebid'
+})
+
+// Watch for route changes and update search input
+watch(() => [route.params.gebid, route.query.gebid], ([paramGebid, queryGebid]) => {
+  const gebid = paramGebid || queryGebid
+  if (gebid && typeof gebid === 'string') {
+    gebidSearch.value = gebid
+  }
+}, { immediate: true })
+
+// Initialize search input from route on mount
+onMounted(() => {
+  const gebid = route.params.gebid || route.query.gebid
+  if (gebid && typeof gebid === 'string') {
+    gebidSearch.value = gebid
+  }
 })
 
 // Handle search functionality
 const handleSearch = async () => {
   if (gebidSearch.value.trim()) {
-    await router.push(`/gebid=${gebidSearch.value.trim()}`)
+    const trimmedGebid = gebidSearch.value.trim()
+    
+    // Navigate based on current route
+    if (route.path === '/data-sources' || route.name === 'data-sources') {
+      // Stay on data sources page but add gebid as query param
+      await router.push(`/data-sources?gebid=${trimmedGebid}`)
+    } else {
+      // Navigate to building analysis with gebid
+      await router.push(`/buildinganalysis/gebid=${trimmedGebid}`)
+    }
   }
 }
 

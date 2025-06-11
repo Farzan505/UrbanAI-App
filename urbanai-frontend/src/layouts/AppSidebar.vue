@@ -22,19 +22,28 @@ import {
 const route = useRoute()
 const { state } = useSidebar()
 
-// Menu items with computed active states
+// Get current building ID if available
+const currentGebid = computed(() => {
+  return route.params.gebid ? String(route.params.gebid) : 
+         route.query.gebid ? String(route.query.gebid) : null
+})
+
+// Menu items with computed active states and dynamic URLs
 const items = computed(() => [
   {
     title: "Dashboard",
     url: "/",
     icon: CircleGauge,
-    isActive: route.path === '/' && !route.params.gebid,
+    isActive: route.path === '/' && !route.params.gebid && !route.query.gebid,
   },
   {
     title: "Gebäudeanalyse",
-    url: "/",
+    url: currentGebid.value ? `/buildinganalysis/gebid=${currentGebid.value}` : "/buildinganalysis",
     icon: HousePlus,
-    isActive: route.path === '/' || route.path.startsWith('/gebid='),
+    isActive: route.path === '/buildinganalysis' || 
+              route.path.startsWith('/buildinganalysis/gebid=') || 
+              route.path.startsWith('/gebid=') ||
+              (route.path === '/' && (route.params.gebid || route.query.gebid)),
   },
   {
     title: "Portfolioanalyse",
@@ -44,7 +53,7 @@ const items = computed(() => [
   },
   {
     title: "Datenquellen",
-    url: "/data-sources",
+    url: currentGebid.value ? `/data-sources?gebid=${currentGebid.value}` : "/data-sources",
     icon: BookOpen,
     isActive: route.path === '/data-sources',
   },

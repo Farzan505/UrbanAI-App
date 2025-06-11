@@ -13,12 +13,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { Badge } from '@/components/ui/badge'
 import ArcGISSceneViewer from '@/components/map/ArcGISSceneViewer.vue'
-import { Plus, Settings, X } from 'lucide-vue-next'
+import { Plus, Settings, X, Zap, Factory, AlertTriangle, Euro } from 'lucide-vue-next'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { toast } from 'vue-sonner'
 
 // Router
-const route = useRoute()
+let route: any
+try {
+  route = useRoute()
+} catch (err) {
+  console.error('Error accessing route:', err)
+  // Create a fallback route object
+  route = {
+    params: {},
+    query: {},
+    path: '/'
+  }
+}
 
 // Props (for when accessed via route params)
 interface Props {
@@ -170,76 +181,154 @@ interface RetrofitScenario {
 
 // Search for building by GEBID
 const searchBuilding = async (gebidToSearch: string) => {
-  if (!gebidToSearch) {
-    searchError.value = 'Please enter a GEBID'
-    return
-  }
-
-  isSearching.value = true
-  searchError.value = ''
-  showViewer.value = false
-
   try {
-    const response = await fetch(
-      `${apiBaseUrl.value}/api/database/get_building_data/${encodeURIComponent(gebidToSearch)}`
-    )
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
+    console.log('🔍 searchBuilding called with:', gebidToSearch)
+    
+    if (!gebidToSearch) {
+      searchError.value = 'Please enter a GEBID'
+      console.log('❌ No gebidToSearch provided')
+      return
     }
 
-    const responseData: BuildingDataResponse = await response.json()
-    console.log('Building data response:', responseData)
-    console.log('Response data keys:', Object.keys(responseData.data || {}))
-    console.log('Buildings assumptions:', responseData.data?.buildings_assumptions)
-    console.log('GML mapping:', responseData.data?.gmlid_gebid_mapping)
+    console.log('🚀 Starting search for building:', gebidToSearch)
+    isSearching.value = true
+    searchError.value = ''
+    showViewer.value = false
 
-    // Check if the response is successful and has data
-    if (responseData.status === 'success' && responseData.data) {
-      const { data } = responseData
+    try {
+      const url = `${apiBaseUrl.value}/api/database/get_building_data/${encodeURIComponent(gebidToSearch)}`
+      console.log('📡 Fetching from URL:', url)
       
-      // Store building data for display
-      buildingData.value = data
-      console.log('Stored buildingData:', buildingData.value)
-      console.log('Building assumptions in stored data:', buildingData.value?.buildings_assumptions)
-      
-      // Extract GML IDs from the nested data structure
-      if (data.gmlid_gebid_mapping && data.gmlid_gebid_mapping.length > 0) {
-        currentGmlIds.value = data.gmlid_gebid_mapping.map(item => item.gmlid)
-        console.log('Found GML IDs:', currentGmlIds.value)
-        
-        // Show the viewer immediately (each card will handle its own loading)
-        showViewer.value = true
-        
-        // Fetch geometry data for the GML IDs (non-blocking)
-        fetchGeometry(currentGmlIds.value)
-      } else {
-        searchError.value = 'No GML ID mapping found for this GEBID'
+      const response = await fetch(url)
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
       }
-    } else {
-      searchError.value = `API returned status: ${responseData.status || 'unknown'}`
-    }
 
+      const responseData: BuildingDataResponse = await response.json()
+      console.log('✅ Building data response received:', responseData)
+      console.log('Response data keys:', Object.keys(responseData.data || {}))
+      console.log('Buildings assumptions:', responseData.data?.buildings_assumptions)
+      console.log('GML mapping:', responseData.data?.gmlid_gebid_mapping)
+
+      // Check if the response is successful and has data
+      if (responseData.status === 'success' && responseData.data) {
+        const { data } = responseData
+        
+        // Store building data for display
+        buildingData.value = data
+        console.log('💾 Stored buildingData:', buildingData.value)
+        console.log('Building assumptions in stored data:', buildingData.value?.buildings_assumptions)
+        
+        // Extract GML IDs from the nested data structure
+        if (data.gmlid_gebid_mapping && data.gmlid_gebid_mapping.length > 0) {
+          currentGmlIds.value = data.gmlid_gebid_mapping.map(item => item.gmlid)
+          console.log('🗺️ Found GML IDs:', currentGmlIds.value)
+          
+          // Show the viewer immediately (each card will handle its own loading)
+          showViewer.value = true
+          console.log('👁️ Set showViewer to true')
+          
+          // Fetch geometry data for the GML IDs (non-blocking)
+          fetchGeometry(currentGmlIds.value).catch(err => {
+            console.error('Non-blocking geometry fetch error:', err)
+          })
+        } else {
+          searchError.value = 'No GML ID mapping found for this GEBID'
+          console.log('❌ No GML ID mapping found')
+        }
+      } else {
+        searchError.value = `API returned status: ${responseData.status || 'unknown'}`
+        console.log('❌ API returned unsuccessful status:', responseData.status)
+      }
+
+    } catch (err) {
+      searchError.value = `Search failed: ${err instanceof Error ? err.message : 'Unknown error'}`
+      console.error('❌ Search error:', err)
+    } finally {
+      isSearching.value = false
+      console.log('🏁 Search completed, isSearching:', isSearching.value, 'showViewer:', showViewer.value)
+    }
   } catch (err) {
-    searchError.value = `Search failed: ${err instanceof Error ? err.message : 'Unknown error'}`
-    console.error('Search error:', err)
-  } finally {
+    console.error('❌ Outer search error:', err)
+    searchError.value = 'An unexpected error occurred'
     isSearching.value = false
   }
 }
 
-// Watch for route changes
-watch(() => route.params.gebid, (newGebid) => {
-  if (newGebid && typeof newGebid === 'string') {
-    searchBuilding(newGebid)
+// Watch for route changes (both params and query)
+watch(() => {
+  try {
+    return [route.params.gebid, route.query.gebid, route.path]
+  } catch (err) {
+    console.error('Error accessing route in watcher:', err)
+    return [null, null, null]
+  }
+}, ([paramGebid, queryGebid, path], [oldParamGebid, oldQueryGebid, oldPath]) => {
+  try {
+    const newGebid = paramGebid || queryGebid
+    const oldGebid = oldParamGebid || oldQueryGebid
+    
+    console.log('Route changed:', { 
+      paramGebid, 
+      queryGebid, 
+      newGebid, 
+      oldGebid, 
+      path,
+      oldPath
+    })
+    
+    if (newGebid && typeof newGebid === 'string') {
+      // Only search if we don't already have this building loaded
+      const currentGebid = buildingData.value?.buildings_assumptions?.gebid
+      if (currentGebid !== newGebid) {
+        console.log('Triggering searchBuilding from route watcher for:', newGebid)
+        searchBuilding(newGebid)
+      }
+    } else if (!newGebid && oldGebid) {
+      // Route changed but no gebid - reset the view
+      console.log('Route changed to no gebid, resetting view')
+      showViewer.value = false
+      buildingData.value = null
+      currentGmlIds.value = []
+    }
+  } catch (err) {
+    console.error('Error in route watcher callback:', err)
   }
 }, { immediate: true })
 
 // Initialize from props or route
 onMounted(() => {
-  const initialGebid = props.gebid || route.params.gebid
-  if (initialGebid && typeof initialGebid === 'string') {
-    searchBuilding(initialGebid)
+  try {
+    console.log('BuildingViewer mounted with full route info:', { 
+      propsGebid: props.gebid, 
+      routeGebid: route.params.gebid, 
+      routePath: route.path,
+      routeName: route.name,
+      fullRoute: route,
+      allParams: route.params,
+      allQuery: route.query
+    })
+    
+    const initialGebid = props.gebid || route.params.gebid
+    if (initialGebid && typeof initialGebid === 'string') {
+      console.log('Initializing with gebid:', initialGebid)
+      searchBuilding(initialGebid)
+    } else {
+      console.log('No initial gebid found - checking alternative sources')
+      console.log('Route params keys:', Object.keys(route.params))
+      console.log('Route query keys:', Object.keys(route.query))
+      console.log('Checking if gebid is in query:', route.query.gebid)
+      
+      // Check if gebid is in query parameters instead
+      if (route.query.gebid && typeof route.query.gebid === 'string') {
+        console.log('Found gebid in query parameters:', route.query.gebid)
+        searchBuilding(route.query.gebid)
+      }
+    }
+  } catch (err) {
+    console.error('Error in onMounted:', err)
+    searchError.value = 'Initialization error occurred'
   }
 })
 
@@ -324,161 +413,296 @@ const fetchFormData = async () => {
 
 // Handle opening retrofit scenario sheet
 const openRetrofitSheet = () => {
-  isSheetOpen.value = true
-  fetchFormData()
+  try {
+    isSheetOpen.value = true
+    fetchFormData().catch(err => {
+      console.error('Error fetching form data:', err)
+    })
+  } catch (err) {
+    console.error('Error opening retrofit sheet:', err)
+  }
 }
 
 // Check if all construction types are selected
 const isConstructionComplete = computed(() => {
-  return Object.values(selectedConstructions.value).every(val => val !== '')
+  try {
+    return Object.values(selectedConstructions.value).every(val => val !== '')
+  } catch (err) {
+    console.error('Error in isConstructionComplete computed:', err)
+    return false
+  }
 })
 
 // Get construction options for a specific type
 const getConstructionOptions = (constructionType: string) => {
-  return formData.value?.construction_samples[constructionType] || []
+  try {
+    return formData.value?.construction_samples[constructionType] || []
+  } catch (err) {
+    console.error('Error in getConstructionOptions:', err)
+    return []
+  }
 }
 
 // Get HVAC options for selected type
 const getHVACOptions = computed(() => {
-  return selectedHVACType.value ? 
-    (formData.value?.hvac_samples[selectedHVACType.value] || []) : 
-    []
+  try {
+    return selectedHVACType.value ? 
+      (formData.value?.hvac_samples[selectedHVACType.value] || []) : 
+      []
+  } catch (err) {
+    console.error('Error in getHVACOptions computed:', err)
+    return []
+  }
 })
 
 // Get construction summary for display
 const constructionSummary = computed(() => {
-  if (!retrofitScenario.value) return ''
-  
-  const constructionTypes = Object.keys(retrofitScenario.value.construction)
-  if (constructionTypes.length === 0) return 'Keine Auswahl'
-  
-  return constructionTypes.join(', ')
+  try {
+    if (!retrofitScenario.value) return ''
+    
+    const constructionTypes = Object.keys(retrofitScenario.value.construction)
+    if (constructionTypes.length === 0) return 'Keine Auswahl'
+    
+    return constructionTypes.join(', ')
+  } catch (err) {
+    console.error('Error in constructionSummary computed:', err)
+    return 'Fehler bei der Zusammenfassung'
+  }
+})
+
+// Get building surface areas from geometry data
+const buildingSurfaceAreas = computed(() => {
+  try {
+    console.log('🏢 Checking geometry data for surface areas:', geometryData.value)
+    
+    if (!geometryData.value) {
+      console.log('❌ No geometry data available')
+      return null
+    }
+    
+    // Check different possible locations for summed_surface_areas
+    let areas = null
+    if (geometryData.value.summed_surface_areas) {
+      areas = geometryData.value.summed_surface_areas
+      console.log('✅ Found summed_surface_areas directly:', areas)
+    } else if (geometryData.value.results?.summed_surface_areas) {
+      areas = geometryData.value.results.summed_surface_areas
+      console.log('✅ Found summed_surface_areas in results:', areas)
+    } else {
+      // Look for it in nested structure
+      for (const key in geometryData.value) {
+        if (geometryData.value[key]?.summed_surface_areas) {
+          areas = geometryData.value[key].summed_surface_areas
+          console.log(`✅ Found summed_surface_areas in ${key}:`, areas)
+          break
+        }
+      }
+    }
+    
+    if (!areas) {
+      console.log('❌ No summed_surface_areas found in geometry data')
+      console.log('Available keys:', Object.keys(geometryData.value))
+      return null
+    }
+    
+    // German translations for surface types
+    const surfaceLabels = {
+      'buildingwallsurface_area': 'Außenwandfläche',
+      'buildingroofsurface_area': 'Dachfläche', 
+      'buildinggroundsurface_area': 'Bodenfläche',
+      'buildingwindowsurface_area': 'Fensterfläche',
+      'buildingwallsurface_adiabatic_area': 'Außenwandfläche (gemeinsame Flächen)',
+      'buildingwallsurface_nonadiabatic_area': 'Außenwandfläche (nicht gemeinsame Flächen)',
+      'total_bgf': 'Bruttogrundfläche',
+      'total_ngf': 'Nettogrundfläche',
+      'total_built_area': 'Bebaute Fläche'
+    }
+    
+    // Convert to array with German labels and formatted values
+    const result = Object.entries(areas).map(([key, value]) => ({
+      label: surfaceLabels[key] || key,
+      value: typeof value === 'number' ? value.toFixed(2) : 'N/A',
+      unit: 'm²'
+    }))
+    
+    console.log('🏢 Processed surface areas:', result)
+    return result
+  } catch (err) {
+    console.error('Error in buildingSurfaceAreas computed:', err)
+    return null
+  }
 })
 
 // Handle saving retrofit scenario
 const saveRetrofitScenario = () => {
-  if (!isConstructionComplete.value || !selectedHVAC.value || !constructionYear.value || !hvacYear.value) {
-    return // Validation failed
-  }
-
-  const constructionData: {[key: string]: any} = {}
-  
-  // Build construction data object
-  Object.keys(selectedConstructions.value).forEach(constructionType => {
-    const selectedNumber = selectedConstructions.value[constructionType]
-    const constructionItem = formData.value?.construction_samples[constructionType]?.find(
-      item => item.construction_number === selectedNumber
-    )
-    if (constructionItem) {
-      constructionData[constructionType] = constructionItem
+  try {
+    if (!isConstructionComplete.value || !selectedHVAC.value || !constructionYear.value || !hvacYear.value) {
+      return // Validation failed
     }
-  })
 
-  const hvacItem = getHVACOptions.value.find(item => item.hvac_number === selectedHVAC.value)
-  if (!hvacItem) return
+    const constructionData: {[key: string]: any} = {}
+    
+    // Build construction data object
+    Object.keys(selectedConstructions.value).forEach(constructionType => {
+      const selectedNumber = selectedConstructions.value[constructionType]
+      const constructionItem = formData.value?.construction_samples[constructionType]?.find(
+        item => item.construction_number === selectedNumber
+      )
+      if (constructionItem) {
+        constructionData[constructionType] = constructionItem
+      }
+    })
 
-  retrofitScenario.value = {
-    construction: constructionData,
-    construction_year: constructionYear.value,
-    hvac: hvacItem,
-    hvac_year: hvacYear.value
+    const hvacItem = getHVACOptions.value.find(item => item.hvac_number === selectedHVAC.value)
+    if (!hvacItem) return
+
+    retrofitScenario.value = {
+      construction: constructionData,
+      construction_year: constructionYear.value,
+      hvac: hvacItem,
+      hvac_year: hvacYear.value
+    }
+
+    isSheetOpen.value = false
+    
+    // TODO: Send to backend for calculation and storing
+    console.log('Saved retrofit scenario:', retrofitScenario.value)
+  } catch (err) {
+    console.error('Error saving retrofit scenario:', err)
+    // Show error toast if possible
+    try {
+      toast.error('Fehler beim Speichern', {
+        description: 'Das Sanierungszenario konnte nicht gespeichert werden.'
+      })
+    } catch (toastErr) {
+      console.error('Error showing error toast:', toastErr)
+    }
   }
-
-  isSheetOpen.value = false
-  
-  // TODO: Send to backend for calculation and storing
-  console.log('Saved retrofit scenario:', retrofitScenario.value)
 }
 
 // Handle canceling/removing retrofit scenario
 const removeRetrofitScenario = () => {
-  // Store current state for undo
-  deletedScenario.value = { ...retrofitScenario.value! }
-  deletedFormState.value = {
-    selectedConstructions: { ...selectedConstructions.value },
-    selectedHVACType: selectedHVACType.value,
-    selectedHVAC: selectedHVAC.value,
-    constructionYear: constructionYear.value,
-    hvacYear: hvacYear.value
+  try {
+    // Store current state for undo
+    deletedScenario.value = { ...retrofitScenario.value! }
+    deletedFormState.value = {
+      selectedConstructions: { ...selectedConstructions.value },
+      selectedHVACType: selectedHVACType.value,
+      selectedHVAC: selectedHVAC.value,
+      constructionYear: constructionYear.value,
+      hvacYear: hvacYear.value
+    }
+    
+    // Clear current scenario
+    retrofitScenario.value = null
+    selectedConstructions.value = {
+      'Außenwand': '',
+      'Boden': '',
+      'Dach': '',
+      'Fenster': ''
+    }
+    selectedHVACType.value = ''
+    selectedHVAC.value = ''
+    constructionYear.value = ''
+    hvacYear.value = ''
+    
+    // Close dialog
+    isDeleteDialogOpen.value = false
+    
+    // Show toast with undo option
+    try {
+      toast('Sanierungszenario gelöscht', {
+        description: 'Das Sanierungszenario wurde erfolgreich entfernt.',
+        action: {
+          label: 'Rückgängig',
+          onClick: () => undoDeleteScenario()
+        },
+        duration: 5000
+      })
+    } catch (toastErr) {
+      console.error('Error showing delete toast:', toastErr)
+    }
+  } catch (err) {
+    console.error('Error removing retrofit scenario:', err)
   }
-  
-  // Clear current scenario
-  retrofitScenario.value = null
-  selectedConstructions.value = {
-    'Außenwand': '',
-    'Boden': '',
-    'Dach': '',
-    'Fenster': ''
-  }
-  selectedHVACType.value = ''
-  selectedHVAC.value = ''
-  constructionYear.value = ''
-  hvacYear.value = ''
-  
-  // Close dialog
-  isDeleteDialogOpen.value = false
-  
-  // Show toast with undo option
-  toast('Sanierungszenario gelöscht', {
-    description: 'Das Sanierungszenario wurde erfolgreich entfernt.',
-    action: {
-      label: 'Rückgängig',
-      onClick: () => undoDeleteScenario()
-    },
-    duration: 5000
-  })
 }
 
 // Undo delete scenario
 const undoDeleteScenario = () => {
-  if (deletedScenario.value && deletedFormState.value) {
-    // Restore scenario
-    retrofitScenario.value = deletedScenario.value
-    
-    // Restore form state
-    selectedConstructions.value = deletedFormState.value.selectedConstructions
-    selectedHVACType.value = deletedFormState.value.selectedHVACType
-    selectedHVAC.value = deletedFormState.value.selectedHVAC
-    constructionYear.value = deletedFormState.value.constructionYear
-    hvacYear.value = deletedFormState.value.hvacYear
-    
-    // Clear undo data
-    deletedScenario.value = null
-    deletedFormState.value = null
-    
-    // Show success toast
-    toast.success('Sanierungszenario wiederhergestellt', {
-      description: 'Das Sanierungszenario wurde erfolgreich wiederhergestellt.'
-    })
+  try {
+    if (deletedScenario.value && deletedFormState.value) {
+      // Restore scenario
+      retrofitScenario.value = deletedScenario.value
+      
+      // Restore form state
+      selectedConstructions.value = deletedFormState.value.selectedConstructions
+      selectedHVACType.value = deletedFormState.value.selectedHVACType
+      selectedHVAC.value = deletedFormState.value.selectedHVAC
+      constructionYear.value = deletedFormState.value.constructionYear
+      hvacYear.value = deletedFormState.value.hvacYear
+      
+      // Clear undo data
+      deletedScenario.value = null
+      deletedFormState.value = null
+      
+      // Show success toast
+      try {
+        toast.success('Sanierungszenario wiederhergestellt', {
+          description: 'Das Sanierungszenario wurde erfolgreich wiederhergestellt.'
+        })
+      } catch (toastErr) {
+        console.error('Error showing success toast:', toastErr)
+      }
+    }
+  } catch (err) {
+    console.error('Error undoing delete scenario:', err)
   }
 }
 
 // Handle delete button click (opens confirmation dialog)
 const handleDeleteClick = () => {
-  isDeleteDialogOpen.value = true
+  try {
+    isDeleteDialogOpen.value = true
+  } catch (err) {
+    console.error('Error opening delete dialog:', err)
+  }
+}
+
+// Format display values for German localization
+const formatDisplayValue = (value: any) => {
+  if (value === true) return 'Ja'
+  if (value === false) return 'Nein'
+  if (value === null || value === undefined || value === '' || value === 'N/A') return 'keine Info vorhanden'
+  return value
 }
 
 // Handle modifying existing scenario
 const modifyRetrofitScenario = () => {
-  if (retrofitScenario.value) {
-    // Restore construction selections
-    Object.keys(retrofitScenario.value.construction).forEach(constructionType => {
-      selectedConstructions.value[constructionType] = retrofitScenario.value!.construction[constructionType].construction_number
+  try {
+    if (retrofitScenario.value) {
+      // Restore construction selections
+      Object.keys(retrofitScenario.value.construction).forEach(constructionType => {
+        selectedConstructions.value[constructionType] = retrofitScenario.value!.construction[constructionType].construction_number
+      })
+      constructionYear.value = retrofitScenario.value.construction_year
+      
+      // Restore HVAC selections
+      selectedHVACType.value = retrofitScenario.value.hvac.hvac_type
+      selectedHVAC.value = retrofitScenario.value.hvac.hvac_number
+      hvacYear.value = retrofitScenario.value.hvac_year
+    }
+    isSheetOpen.value = true
+    fetchFormData().catch(err => {
+      console.error('Error fetching form data:', err)
     })
-    constructionYear.value = retrofitScenario.value.construction_year
-    
-    // Restore HVAC selections
-    selectedHVACType.value = retrofitScenario.value.hvac.hvac_type
-    selectedHVAC.value = retrofitScenario.value.hvac.hvac_number
-    hvacYear.value = retrofitScenario.value.hvac_year
+  } catch (err) {
+    console.error('Error modifying retrofit scenario:', err)
   }
-  isSheetOpen.value = true
-  fetchFormData()
 }
 </script>
 
 <template>
-  <div class="h-full bg-gray-50">
+  <div class="h-full bg-white">
     <!-- Main Content -->
     <main class="w-full px-4 sm:px-6 lg:px-8 py-8 h-full overflow-auto">
       <!-- Error Message -->
@@ -556,7 +780,7 @@ const modifyRetrofitScenario = () => {
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <!-- Building Information -->
           <div class="lg:col-span-1">
-            <Card class="w-full h-[600px]">
+            <Card class="w-full h-[520px]">
               <CardHeader>
                 <div class="flex items-center justify-between">
                   <CardTitle>Gebäudeinformationen</CardTitle>
@@ -939,7 +1163,7 @@ const modifyRetrofitScenario = () => {
                                 <AlertDialogTitle>Sanierungszenario löschen?</AlertDialogTitle>
                                 <AlertDialogDescription>
                                   Sind Sie sicher, dass Sie dieses Sanierungszenario löschen möchten? 
-                                  Diese Aktion kann rückgängig gemacht werden.
+                                  Diese Aktion kann nicht rückgängig gemacht werden.
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
@@ -992,29 +1216,33 @@ const modifyRetrofitScenario = () => {
                   <Accordion type="single" collapsible class="w-full" default-value="building-info">
                     <!-- Building Assumptions -->
                     <AccordionItem value="building-info">
-                      <AccordionTrigger>Gebäude Grunddaten</AccordionTrigger>
+                      <AccordionTrigger>Gebäudeannahmen</AccordionTrigger>
                       <AccordionContent>
                         <div v-if="buildingData?.buildings_assumptions" class="space-y-3">
                           <div class="grid grid-cols-1 gap-2 text-sm">
                             <div class="flex justify-between">
-                              <span class="font-medium text-gray-600">GEBID:</span>
-                              <span class="text-gray-900">{{ buildingData.buildings_assumptions.gebid }}</span>
+                              <span class="font-medium text-gray-600">Bauwerkszuordnung:</span>
+                              <span class="text-gray-900">{{ formatDisplayValue(buildingData.buildings_assumptions.bwz_category) }}</span>
                             </div>
                             <div class="flex justify-between">
-                              <span class="font-medium text-gray-600">EPL:</span>
-                              <span class="text-gray-900">{{ buildingData.buildings_assumptions.epl || 'N/A' }}</span>
+                              <span class="font-medium text-gray-600">Bautypologie (EnOB:DataNWG):</span>
+                              <span class="text-gray-900">{{ formatDisplayValue(buildingData.buildings_assumptions.enob_category) }}</span>
                             </div>
                             <div class="flex justify-between">
-                              <span class="font-medium text-gray-600">BABEZ:</span>
-                              <span class="text-gray-900">{{ buildingData.buildings_assumptions.babez || 'N/A' }}</span>
+                              <span class="font-medium text-gray-600">Baualtersklasse (Originalzustand):</span>
+                              <span class="text-gray-900">{{ formatDisplayValue(buildingData.buildings_assumptions.bac) }}</span>
                             </div>
                             <div class="flex justify-between">
-                              <span class="font-medium text-gray-600">LIGBEZ:</span>
-                              <span class="text-gray-900 text-right">{{ buildingData.buildings_assumptions.ligbez || 'N/A' }}</span>
+                              <span class="font-medium text-gray-600">Baualtersklasse (Status Quo):</span>
+                              <span class="text-gray-900">{{ formatDisplayValue(buildingData.buildings_assumptions.sq_standard) }}</span>
                             </div>
                             <div class="flex justify-between">
-                              <span class="font-medium text-gray-600">GEBZABT:</span>
-                              <span class="text-gray-900">{{ buildingData.buildings_assumptions.gebzabt || 'N/A' }}</span>
+                              <span class="font-medium text-gray-600">Denkmalschutz:</span>
+                              <span class="text-gray-900 text-right">{{ formatDisplayValue(buildingData.buildings_assumptions.is_heritage) }}</span>
+                            </div>
+                            <div class="flex justify-between">
+                              <span class="font-medium text-gray-600">Versorgung:</span>
+                              <span class="text-gray-900">{{ formatDisplayValue(buildingData.buildings_assumptions.versorgung_emis_mp) }}</span>
                             </div>
                           </div>
                         </div>
@@ -1056,6 +1284,29 @@ const modifyRetrofitScenario = () => {
                         </div>
                       </AccordionContent>
                     </AccordionItem>
+
+                    <!-- Building Surface Areas -->
+                    <AccordionItem value="surface-areas">
+                      <AccordionTrigger>Gebäudeflächen</AccordionTrigger>
+                      <AccordionContent>
+                        <div v-if="buildingSurfaceAreas" class="space-y-3">
+                          <div class="grid grid-cols-1 gap-2 text-sm">
+                            <div v-for="surface in buildingSurfaceAreas" :key="surface.label" class="flex justify-between">
+                              <span class="font-medium text-gray-600">{{ surface.label }}:</span>
+                              <span class="text-gray-900">{{ surface.value }} {{ surface.unit }}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div v-else-if="geometryLoading" class="space-y-2">
+                          <Skeleton class="h-4 w-full" />
+                          <Skeleton class="h-4 w-3/4" />
+                          <Skeleton class="h-4 w-1/2" />
+                        </div>
+                        <div v-else class="text-sm text-gray-500">
+                          Keine Flächendaten verfügbar
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
                   </Accordion>
                 </div>
               </CardContent>
@@ -1064,40 +1315,114 @@ const modifyRetrofitScenario = () => {
 
           <!-- 3D Scene Viewer -->
           <div class="lg:col-span-1">
-            <Card class="w-full h-[600px]">
-              <CardHeader>
+            <Card class="w-full h-[520px] flex flex-col">
+              <CardHeader class="flex-shrink-0">
                 <CardTitle>Gebäudevisualisierung</CardTitle>
                 <CardDescription v-if="geometryLoading" class="text-sm text-muted-foreground">
                   Geometriedaten werden geladen...
                 </CardDescription>
               </CardHeader>
-              <CardContent class="p-0 h-full">
+              <CardContent class="p-0 flex-1 overflow-hidden">
                 <!-- Loading state for geometry visualization -->
                 <div v-if="geometryLoading" class="h-full flex items-center justify-center">
                   <div class="space-y-4 w-full max-w-sm mx-auto p-4">
-                    <Skeleton class="h-8 w-3/4 mx-auto" />
-                    <Skeleton class="h-64 w-full" />
+                    <Skeleton class="h-6 w-3/4 mx-auto" />
+                    <Skeleton class="h-32 w-full" />
                     <div class="space-y-2">
-                      <Skeleton class="h-4 w-full" />
-                      <Skeleton class="h-4 w-5/6" />
-                      <Skeleton class="h-4 w-4/6" />
+                      <Skeleton class="h-3 w-full" />
+                      <Skeleton class="h-3 w-5/6" />
+                      <Skeleton class="h-3 w-4/6" />
                     </div>
                   </div>
                 </div>
                 
                 <!-- 3D Viewer content -->
-                <div v-else class="h-full relative">
-                  <ArcGISSceneViewer 
-                    :gml-ids="currentGmlIds"
-                    :api-base-url="apiBaseUrl"
-                    :geometry-data="geometryData"
-                    :geometry-loading="geometryLoading"
-                    class="w-full h-full"
-                  />
+                <div v-else class="h-full w-full">
+                  <div v-if="currentGmlIds.length > 0" class="h-full w-full">
+                    <ArcGISSceneViewer 
+                      :gml-ids="currentGmlIds"
+                      :api-base-url="apiBaseUrl"
+                      :geometry-data="geometryData"
+                      :geometry-loading="geometryLoading"
+                      class="w-full h-full block"
+                    />
+                  </div>
+                  <div v-else class="h-full flex items-center justify-center">
+                    <div class="text-center text-muted-foreground">
+                      <p>Keine GML-IDs verfügbar für die Visualisierung</p>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
           </div>
+        </div>
+        
+        <!-- Energy Metrics Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+          <!-- Energiebedarf Card -->
+          <Card class="h-32">
+            <CardHeader class="pb-2">
+              <div class="flex items-center justify-between">
+                <CardTitle class="text-sm font-medium text-foreground">Energiebedarf</CardTitle>
+                <Zap class="h-4 w-4 text-muted-foreground" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div class="text-2xl font-bold">
+                <Skeleton class="h-6 w-16" />
+              </div>
+              <p class="text-xs text-muted-foreground mt-1">kWh/m²·a</p>
+            </CardContent>
+          </Card>
+          
+          <!-- Emissionen Card -->
+          <Card class="h-32">
+            <CardHeader class="pb-2">
+              <div class="flex items-center justify-between">
+                <CardTitle class="text-sm font-medium text-foreground">Emissionen</CardTitle>
+                <Factory class="h-4 w-4 text-muted-foreground" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div class="text-2xl font-bold">
+                <Skeleton class="h-6 w-16" />
+              </div>
+              <p class="text-xs text-muted-foreground mt-1">kg CO₂/m²·a</p>
+            </CardContent>
+          </Card>
+          
+          <!-- Stranding Card -->
+          <Card class="h-32">
+            <CardHeader class="pb-2">
+              <div class="flex items-center justify-between">
+                <CardTitle class="text-sm font-medium text-foreground">Stranding</CardTitle>
+                <AlertTriangle class="h-4 w-4 text-muted-foreground" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div class="text-2xl font-bold">
+                <Skeleton class="h-6 w-16" />
+              </div>
+              <p class="text-xs text-muted-foreground mt-1">Risiko-Index</p>
+            </CardContent>
+          </Card>
+          
+          <!-- Betriebskosten Card -->
+          <Card class="h-32">
+            <CardHeader class="pb-2">
+              <div class="flex items-center justify-between">
+                <CardTitle class="text-sm font-medium text-foreground">Betriebskosten</CardTitle>
+                <Euro class="h-4 w-4 text-muted-foreground" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div class="text-2xl font-bold">
+                <Skeleton class="h-6 w-16" />
+              </div>
+              <p class="text-xs text-muted-foreground mt-1">€/m²·a</p>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </main>

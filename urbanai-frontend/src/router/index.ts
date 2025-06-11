@@ -16,10 +16,23 @@ const router = createRouter({
           component: BuildingViewer
         },
         {
-          path: 'gebid=:gebid',
-          name: 'gebid',
+          path: 'buildinganalysis',
+          name: 'building-analysis',
+          component: BuildingViewer
+        },
+        {
+          path: 'buildinganalysis/gebid=:gebid',
+          name: 'building-analysis-gebid',
           component: BuildingViewer,
           props: true
+        },
+        {
+          path: 'gebid=:gebid',
+          name: 'gebid',
+          redirect: to => {
+            // Redirect old gebid routes to new buildinganalysis routes
+            return `/buildinganalysis/gebid=${to.params.gebid}`
+          }
         },
         {
           path: 'data-sources',

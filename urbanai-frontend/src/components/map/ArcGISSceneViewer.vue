@@ -426,19 +426,19 @@ const zoomToData = async (data: { adiabaticData: any, shadingData: any }) => {
     const extentHeight = extent.ymax - extent.ymin
     const maxExtent = Math.max(extentWidth, extentHeight)
     
-    // For building-level viewing, use a closer zoom
-    const altitude = maxExtent < 0.001 ? 200 : maxExtent * 50000
+    // For building-level viewing, use a much closer zoom
+    const altitude = maxExtent < 0.001 ? 50 : maxExtent * 12000
     
-    // Animate view to the building
+    // Animate view to the building with closer zoom
     await view.goTo({
       target: new Point({
         x: centerX,
         y: centerY,
         spatialReference: { wkid: 4326 }
       }),
-      tilt: 45,
-      heading: 0,
-      zoom: maxExtent < 0.001 ? 18 : 16
+      tilt: 60,
+      heading: 45,
+      zoom: maxExtent < 0.001 ? 19 : 18
     }, {
       duration: 3000,
       easing: "ease-in-out"
@@ -610,37 +610,32 @@ const initializeMap = async () => {
   try {
     console.log('🗺️ Starting map initialization...')
     
-    // Check if the container exists and has proper dimensions
-    const container = document.getElementById("viewDiv")
-    if (!container) {
-      throw new Error('Map container not found')
-    }
-    
-    const containerRect = container.getBoundingClientRect()
-    console.log('📐 Map container dimensions:', {
-      width: containerRect.width,
-      height: containerRect.height,
-      visible: containerRect.width > 0 && containerRect.height > 0
-    })
-    
-    if (containerRect.width === 0 || containerRect.height === 0) {
-      console.warn('⚠️ Map container has zero dimensions!')
-    }
-
-    // Load ArcGIS modules
     const modules = await new Promise((resolve) => {
       (window as any).require([
         "esri/Map",
-        "esri/views/SceneView",
+        "esri/views/SceneView", 
         "esri/config",
         "esri/layers/FeatureLayer",
         "esri/widgets/Legend",
         "esri/widgets/LayerList",
         "esri/widgets/Expand",
+        "esri/widgets/Fullscreen",
         "esri/geometry/Extent",
         "esri/geometry/Point",
         "esri/widgets/DirectLineMeasurement3D"
-      ], (Map: any, SceneView: any, esriConfig: any, FeatureLayer: any, Legend: any, LayerList: any, Expand: any, Extent: any, Point: any, DirectLineMeasurement3D: any) => {
+      ], (
+        Map: any, 
+        SceneView: any, 
+        esriConfig: any, 
+        FeatureLayer: any,
+        Legend: any, 
+        LayerList: any,
+        Expand: any,
+        Fullscreen: any,
+        Extent: any,
+        Point: any,
+        DirectLineMeasurement3D: any
+      ) => {
         resolve({
           Map,
           SceneView,
@@ -649,6 +644,7 @@ const initializeMap = async () => {
           Legend,
           LayerList,
           Expand,
+          Fullscreen,
           Extent,
           Point,
           DirectLineMeasurement3D
@@ -657,7 +653,7 @@ const initializeMap = async () => {
     })
 
     esriModules = modules as any
-    const { Map, SceneView, esriConfig, Legend, LayerList, Expand } = esriModules
+    const { Map, SceneView, esriConfig, Legend, LayerList, Expand, Fullscreen } = esriModules
 
     // Set API key
     esriConfig.apiKey = "AAPK88646347a11d4ca190ec0b00201dc26c8kkfPaCG_kMmrxHsdUiVFuQzgCpecnrd664al4gHRq3VIIKlSV1epDVbEdh7tNJG"
@@ -697,6 +693,7 @@ const initializeMap = async () => {
     // Add widgets
     const legend = new Legend({ view })
     const layerList = new LayerList({ view })
+    const fullscreen = new Fullscreen({ view })
 
     const legendExpand = new Expand({
       view,
@@ -721,7 +718,7 @@ const initializeMap = async () => {
       group: "top-right"
     })
 
-    view.ui.add([legendExpand, layerListExpand, pickerExpand], "top-right")
+    view.ui.add([legendExpand, layerListExpand, pickerExpand, fullscreen], "top-right")
 
     // Add click handler for popups
     view.on("click", (event: any) => {
@@ -818,13 +815,14 @@ onUnmounted(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .map-container {
   flex: 1;
   width: 100%;
   height: 100%;
-  min-height: 400px;
+  min-height: 0;
 }
 
 .panel-content {
@@ -853,5 +851,23 @@ calcite-combobox-item::part(container) {
 /* Global styles for ArcGIS */
 :global(.esri-widget) {
   font-family: inherit;
+}
+
+/* Ensure calcite dropdowns can extend outside container */
+:global(.calcite-combobox-list) {
+  z-index: 9999 !important;
+}
+
+:global(.calcite-popover) {
+  z-index: 9999 !important;
+}
+
+:global(.esri-expand__content) {
+  z-index: 1000 !important;
+}
+
+/* Allow overflow for dropdowns */
+:global(.esri-expand__content-panel) {
+  overflow: visible !important;
 }
 </style> 
