@@ -86,6 +86,20 @@ const selectedHVACType = ref<string>('')
 const selectedHVAC = ref<string>('')
 const hvacYear = ref<string>('')
 
+// Add these state variables after other ref declarations
+const isAnalyzingRetrofit = ref(false)
+const retrofitAnalysisError = ref('')
+const retrofitAnalysisResult = ref<any>(null)
+
+// Add these state variables after other ref declarations
+const isSettingsOpen = ref(false)
+const co2PathScenarios = ref<string[]>([])
+const co2CostScenarios = ref<string[]>([])
+const selectedCo2PathScenario = ref('KSG') // Default value
+const selectedCo2CostScenario = ref('0% reine Zeitpräferenzrate') // Default value
+const isLoadingCo2Scenarios = ref(false)
+const co2ScenariosError = ref('')
+
 // Interface for the API response
 interface BuildingDataResponse {
   gebid: string
@@ -190,6 +204,72 @@ interface RetrofitScenario {
   hvac_year: string | null
 }
 
+// Add this interface before the analyzeRetrofitScenario function
+interface GmlMapping {
+  gebid: string
+  gmlid: string
+  epl: string | null
+  babez: string | null
+  gebzabt: string | null
+  ligbez: string | null
+  geprueft: string
+  kontrollbedarf: string
+  konsistent_citygml_fdh: string
+  kommentar: string | null
+  bearbeitungsbedarf_ldbv: string | null
+  fdh_merge: string | null
+  edited_at: string
+}
+
+// Add interface for the API payload
+interface RetrofitAnalysisPayload {
+  building_id: string
+  gebplz: string
+  building_category: string
+  construction_year: number
+  geometry_data: any  // Accept geometry data as-is from API
+  gmlid_list: string[]  // Keep at root level as API expects
+  system_type: string
+  retrofit_scenario_construction?: string | null
+  retrofit_construction_year?: number | null
+  retrofit_system_type?: string
+  retrofit_subsystem_type: string
+  retrofit_hvac_year?: number | null
+  window_construction?: string
+  wall_construction?: string
+  roof_construction?: string
+  base_construction?: string
+  co2_reduction_scenario: string
+  co2_cost_scenario: string
+}
+
+// Add type for system types
+type SystemType = 'Öl/Gas' | 'Wärmepumpe' | 'Fernwärme' | 'Biomasse'
+
+// Get building category directly from database (no mapping needed)
+const getBuildingCategory = (assumptions: any): string => {
+  const enobCategory = assumptions?.enob_category
+  console.log('🏢 Raw enob_category from database:', enobCategory)
+  
+  // Use the raw value from database, fallback to default if missing
+  return enobCategory || 'Wohngebäude' // Default fallback
+}
+
+// Parse construction year with proper validation
+const parseConstructionYear = (epl: string | number | null | undefined): number => {
+  if (!epl) return 1950 // Default fallback year
+  
+  const year = typeof epl === 'string' ? parseInt(epl) : epl
+  
+  // Validate year range (buildings should be between 1800 and current year)
+  if (isNaN(year) || year < 1900 || year > new Date().getFullYear()) {
+    console.warn(`Invalid construction year: ${epl}, using default 1950`)
+    return 1950
+  }
+  
+  return year
+}
+
 // Search for building by GEBID
 const searchBuilding = async (gebidToSearch: string) => {
   try {
@@ -270,7 +350,7 @@ const searchBuilding = async (gebidToSearch: string) => {
 // Watch for route changes (both params and query)
 watch(() => {
   try {
-    return [route.params.gebid, route.query.gebid, route.path]
+    return [route.params?.gebid, route.query?.gebid, route.path]
   } catch (err) {
     console.error('Error accessing route in watcher:', err)
     return [null, null, null]
@@ -321,6 +401,11 @@ onMounted(() => {
       allQuery: route.query
     })
     
+    // Fetch CO2 scenarios on mount
+    fetchCo2Scenarios().catch(err => {
+      console.error('Error fetching CO2 scenarios:', err)
+    })
+    
     const initialGebid = props.gebid || route.params.gebid
     if (initialGebid && typeof initialGebid === 'string') {
       console.log('Initializing with gebid:', initialGebid)
@@ -366,9 +451,14 @@ const fetchGeometry = async (gmlIds: string[]) => {
       params.append('gmlids', gmlId)
     })
     
-    // Add additional required parameters
-    params.append('building_category', 'Büro-, Verwaltungs- oder Amtsgebäude')
-    params.append('construction_year', '1900')
+    // Extract actual building data instead of hard-coded values
+    const assumptions = buildingData.value?.buildings_assumptions
+    const actualBuildingCategory = getBuildingCategory(assumptions)
+    const actualConstructionYear = parseConstructionYear(assumptions?.epl)
+    
+    // Add required parameters with actual building data
+    params.append('building_category', actualBuildingCategory)
+    params.append('construction_year', actualConstructionYear.toString())
     params.append('radius', '50')
     params.append('calculate_window_areas', 'true')
     
@@ -386,6 +476,13 @@ const fetchGeometry = async (gmlIds: string[]) => {
     
     // Store geometry data
     geometryData.value = data
+    
+    // Automatically trigger base scenario analysis after geometry is loaded
+    console.log('🚀 Geometry loaded successfully, triggering base scenario analysis...')
+    analyzeBaseScenario().catch(err => {
+      console.error('❌ Base scenario analysis failed:', err)
+      // Don't show error toast here as it's automatic - just log it
+    })
     
   } catch (err) {
     geometryError.value = `Failed to fetch geometry: ${err instanceof Error ? err.message : 'Unknown error'}`
@@ -470,16 +567,6 @@ const openRetrofitSheet = () => {
     console.error('Error opening retrofit sheet:', err)
   }
 }
-
-// Check if all construction types are selected
-const isConstructionComplete = computed(() => {
-  try {
-    return Object.values(selectedConstructions.value).every(val => val !== '')
-  } catch (err) {
-    console.error('Error in isConstructionComplete computed:', err)
-    return false
-  }
-})
 
 // Check if energy standard is selected
 const isEnergyStandardSelected = computed(() => {
@@ -602,7 +689,7 @@ const buildingSurfaceAreas = computed(() => {
     }
     
     // German translations for surface types
-    const surfaceLabels = {
+    const surfaceLabels: { [key: string]: string } = {
       'buildingwallsurface_area': 'Außenwandfläche',
       'buildingroofsurface_area': 'Dachfläche', 
       'buildinggroundsurface_area': 'Bodenfläche',
@@ -818,12 +905,422 @@ const modifyRetrofitScenario = () => {
     console.error('Error modifying retrofit scenario:', err)
   }
 }
+
+// Modify the fetchCo2Scenarios function to handle the new response format
+const fetchCo2Scenarios = async () => {
+  try {
+    isLoadingCo2Scenarios.value = true
+    co2ScenariosError.value = ''
+
+    // Fetch both path and cost scenarios in parallel
+    const [pathResponse, costResponse] = await Promise.all([
+      fetch(`${apiBaseUrl.value}/api/construction-hvac/co2-scenarios/path`),
+      fetch(`${apiBaseUrl.value}/api/construction-hvac/co2-scenarios/cost`)
+    ])
+
+    if (!pathResponse.ok || !costResponse.ok) {
+      throw new Error('Failed to fetch CO2 scenarios')
+    }
+
+    const [pathData, costData] = await Promise.all([
+      pathResponse.json(),
+      costResponse.json()
+    ])
+
+    console.log('📥 CO2 Path Scenarios Response:', pathData)
+    console.log('📥 CO2 Cost Scenarios Response:', costData)
+
+    // Handle path scenarios
+    if (pathData.co2_path_scenarios && Array.isArray(pathData.co2_path_scenarios)) {
+      co2PathScenarios.value = pathData.co2_path_scenarios
+      // Store descriptions if available
+      if (pathData.descriptions) {
+        console.log('📝 Path scenario descriptions:', pathData.descriptions)
+      }
+    } else {
+      console.warn('Unexpected path scenarios response structure:', pathData)
+      co2PathScenarios.value = []
+    }
+
+    // Handle cost scenarios
+    if (costData.co2_cost_scenarios && Array.isArray(costData.co2_cost_scenarios)) {
+      co2CostScenarios.value = costData.co2_cost_scenarios
+      // Store descriptions if available
+      if (costData.descriptions) {
+        console.log('📝 Cost scenario descriptions:', costData.descriptions)
+      }
+    } else {
+      console.warn('Unexpected cost scenarios response structure:', costData)
+      co2CostScenarios.value = []
+    }
+
+    // Set defaults if not already set
+    if (!selectedCo2PathScenario.value && co2PathScenarios.value.length > 0) {
+      selectedCo2PathScenario.value = co2PathScenarios.value[0]
+    }
+    if (!selectedCo2CostScenario.value && co2CostScenarios.value.length > 0) {
+      selectedCo2CostScenario.value = co2CostScenarios.value[0]
+    }
+
+    console.log('✅ Updated CO2 scenarios:', {
+      pathScenarios: co2PathScenarios.value,
+      costScenarios: co2CostScenarios.value,
+      selectedPath: selectedCo2PathScenario.value,
+      selectedCost: selectedCo2CostScenario.value
+    })
+
+  } catch (err) {
+    console.error('Error fetching CO2 scenarios:', err)
+    co2ScenariosError.value = `Fehler beim Laden der CO2-Szenarien: ${err instanceof Error ? err.message : 'Unbekannter Fehler'}`
+  } finally {
+    isLoadingCo2Scenarios.value = false
+  }
+}
+
+// Analyze base scenario (status quo) automatically after geometry is loaded
+const analyzeBaseScenario = async () => {
+  try {
+    if (!buildingData.value || !geometryData.value?.results) {
+      console.log('❌ Missing building or geometry data for base scenario analysis')
+      return
+    }
+
+    console.log('🏗️ Starting base scenario analysis...')
+    isAnalyzingRetrofit.value = true
+    retrofitAnalysisError.value = ''
+    retrofitAnalysisResult.value = null
+
+    // Extract required data from building assumptions
+    const assumptions = buildingData.value.buildings_assumptions
+    const gebplz = assumptions.gebid?.split(' ')[0] || ''
+
+    // Debug: Log all building assumptions
+    console.log('🏗️ Building assumptions for base scenario:', assumptions)
+    console.log('🏢 enob_category value:', assumptions?.enob_category)
+    console.log('📅 epl value:', assumptions?.epl)
+
+    // Get GML IDs
+    const gmlIds = buildingData.value.gmlid_gebid_mapping.map((mapping: GmlMapping) => mapping.gmlid)
+
+    // Extract actual building data instead of hard-coded values
+    const actualBuildingCategory = getBuildingCategory(assumptions)
+    const actualConstructionYear = parseConstructionYear(assumptions?.epl)
+
+    console.log('🔍 Processed values:')
+    console.log('   actualBuildingCategory:', actualBuildingCategory)
+    console.log('   actualConstructionYear:', actualConstructionYear)
+    console.log('   gebplz:', gebplz)
+    console.log('   gmlIds:', gmlIds)
+
+    // Create a copy of geometry data to ensure we're not modifying the original
+    const geometryDataCopy = { ...geometryData.value.results }
+
+    console.log('📊 Geometry data structure being sent:')
+    console.log('   geometryData keys:', Object.keys(geometryDataCopy))
+    console.log('   geometryData sample:', {
+      buildings: geometryDataCopy.buildings ? 'present' : 'missing',
+      surface_areas: geometryDataCopy.surface_areas ? 'present' : 'missing',
+      summed_surface_areas: geometryDataCopy.summed_surface_areas ? 'present' : 'missing'
+    })
+
+    // Prepare the request payload for base scenario (status quo)
+    const payload: RetrofitAnalysisPayload = {
+      building_id: assumptions.gebid,
+      gebplz: gebplz,
+      building_category: actualBuildingCategory,
+      construction_year: actualConstructionYear,
+      geometry_data: geometryDataCopy,
+      gmlid_list: gmlIds,
+      system_type: 'Öl/Gas', // Default for base scenario
+      retrofit_subsystem_type: 'Gas', // Default for base scenario
+      co2_reduction_scenario: selectedCo2PathScenario.value,
+      co2_cost_scenario: selectedCo2CostScenario.value
+    }
+
+    console.log('📤 Sending base scenario payload:', payload)
+
+    const response = await fetch(`${apiBaseUrl.value}/api/energy/analyze-retrofit`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
+
+    console.log('📥 Base scenario response status:', response.status)
+
+    if (!response.ok) {
+      // Try to get detailed error message from response
+      let errorDetail = ''
+      try {
+        const errorData = await response.json()
+        console.error('❌ Base scenario error response:', errorData)
+        
+        if (Array.isArray(errorData.detail)) {
+          errorDetail = errorData.detail.map((err: any) => 
+            `${err.loc.join('.')}: ${err.msg} (${err.type})`
+          ).join('\n')
+        } else {
+          errorDetail = errorData.detail || JSON.stringify(errorData)
+        }
+      } catch (e) {
+        errorDetail = `HTTP error! status: ${response.status}`
+      }
+
+      throw new Error(errorDetail)
+    }
+
+    const data = await response.json()
+    console.log('✅ Base scenario analysis response:', data)
+    
+    retrofitAnalysisResult.value = data
+
+    console.log('🎯 Base scenario analysis completed successfully')
+
+  } catch (err) {
+    console.error('❌ Base scenario analysis error:', err)
+    // Don't show error toast for automatic analysis - just log the error
+    retrofitAnalysisError.value = `Base scenario analysis failed: ${err instanceof Error ? err.message : 'Unknown error'}`
+  } finally {
+    isAnalyzingRetrofit.value = false
+  }
+}
+
+// Modify the analyzeRetrofitScenario function to use geometry data as-is
+const analyzeRetrofitScenario = async () => {
+  try {
+    if (!buildingData.value || !geometryData.value?.results) {
+      retrofitAnalysisError.value = 'Fehlende Gebäudedaten für die Analyse'
+      return
+    }
+
+    isAnalyzingRetrofit.value = true
+    retrofitAnalysisError.value = ''
+    retrofitAnalysisResult.value = null
+
+    // Extract required data from building assumptions
+    const assumptions = buildingData.value.buildings_assumptions
+    const gebplz = assumptions.gebid?.split(' ')[0] || ''
+
+    // Get GML IDs
+    const gmlIds = buildingData.value.gmlid_gebid_mapping.map((mapping: GmlMapping) => mapping.gmlid)
+
+    // Log the current state and data structures
+    console.log('🔍 Current state:', {
+      retrofitScenario: retrofitScenario.value,
+      selectedCo2Path: selectedCo2PathScenario.value,
+      selectedCo2Cost: selectedCo2CostScenario.value,
+      selectedHVACType: selectedHVACType.value,
+      selectedHVAC: selectedHVAC.value,
+      hvacType: retrofitScenario.value?.hvac?.hvac_type,
+      geometryData: geometryData.value.results,
+      gmlIds
+    })
+
+    // Log the raw geometry data structure
+    console.log('📊 Raw geometry data structure:', {
+      keys: Object.keys(geometryData.value.results),
+      hasGmlIdList: 'gmlid_list' in geometryData.value.results,
+      geometryDataValue: geometryData.value.results
+    })
+
+    // Get the HVAC type from the selected HVAC item if available
+    const selectedHVACItem = retrofitScenario.value?.hvac 
+      ? getHVACOptions.value.find(item => item.hvac_number === retrofitScenario.value?.hvac?.hvac_number)
+      : null
+
+    // Map HVAC type to valid system type
+    const mapToSystemType = (type: string | undefined): SystemType => {
+      if (!type) return 'Öl/Gas' // Default to Öl/Gas if no type selected
+      const validTypes: SystemType[] = ['Öl/Gas', 'Wärmepumpe', 'Fernwärme', 'Biomasse']
+      return validTypes.includes(type as SystemType) ? (type as SystemType) : 'Öl/Gas'
+    }
+
+    // Get the system type from the selected HVAC type
+    const systemType = mapToSystemType(selectedHVACType.value)
+
+    // Extract actual building data instead of hard-coded values
+    const actualBuildingCategory = getBuildingCategory(assumptions)
+    const actualConstructionYear = parseConstructionYear(assumptions?.epl)
+
+    // Create a copy of geometry data to ensure we're not modifying the original
+    const geometryDataCopy = { ...geometryData.value.results }
+
+    // Prepare the request payload according to API requirements
+    const payload: RetrofitAnalysisPayload = {
+      building_id: assumptions.gebid,
+      gebplz: gebplz,
+      building_category: actualBuildingCategory,
+      construction_year: actualConstructionYear,
+      geometry_data: geometryDataCopy,  // Use copy of geometry data
+      gmlid_list: gmlIds,  // Keep at root level
+      system_type: systemType,
+      retrofit_subsystem_type: selectedHVACItem?.hvac_type || 'Gas',
+      co2_reduction_scenario: selectedCo2PathScenario.value,
+      co2_cost_scenario: selectedCo2CostScenario.value
+    }
+
+    // Log the exact payload being sent
+    console.log('📤 Sending payload:', JSON.stringify(payload, null, 2))
+    console.log('📤 Payload structure:', {
+      hasGeometryData: 'geometry_data' in payload,
+      geometryDataKeys: Object.keys(payload.geometry_data),
+      hasGmlIdList: 'gmlid_list' in payload,
+      gmlIdListLocation: 'gmlid_list' in payload.geometry_data ? 'inside geometry_data' : 'at root level'
+    })
+
+    const response = await fetch(`${apiBaseUrl.value}/api/energy/analyze-retrofit`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
+
+    // Log the response status and headers
+    console.log('📥 Response status:', response.status)
+    console.log('📥 Response headers:', Object.fromEntries(response.headers.entries()))
+
+    if (!response.ok) {
+      // Try to get detailed error message from response
+      let errorDetail = ''
+      try {
+        const errorData = await response.json()
+        console.error('❌ Error response data:', errorData)
+        console.error('❌ Error payload that caused the error:', JSON.stringify(payload, null, 2))
+        
+        // Format validation errors in a more readable way
+        if (Array.isArray(errorData.detail)) {
+          errorDetail = errorData.detail.map((err: any) => 
+            `${err.loc.join('.')}: ${err.msg} (${err.type})`
+          ).join('\n')
+        } else {
+          errorDetail = errorData.detail || JSON.stringify(errorData)
+        }
+      } catch (e) {
+        errorDetail = `HTTP error! status: ${response.status}`
+      }
+
+      throw new Error(errorDetail)
+    }
+
+    const data = await response.json()
+    console.log('✅ Retrofit analysis response:', data)
+    
+    retrofitAnalysisResult.value = data
+
+    // Show appropriate success message based on whether we analyzed a scenario or status quo
+    const message = retrofitScenario.value 
+      ? 'Die Sanierungsanalyse wurde erfolgreich durchgeführt.'
+      : 'Die Status-Quo-Analyse wurde erfolgreich durchgeführt.'
+    
+    toast.success('Analyse erfolgreich', {
+      description: message
+    })
+
+  } catch (err) {
+    console.error('❌ Retrofit analysis error:', err)
+    // Show more detailed error message
+    const errorMessage = err instanceof Error 
+      ? err.message
+      : 'Unbekannter Fehler'
+    
+    retrofitAnalysisError.value = `Analyse fehlgeschlagen: ${errorMessage}`
+    
+    // Show error toast with more details
+    toast.error('Analyse fehlgeschlagen', {
+      description: retrofitAnalysisError.value
+    })
+  } finally {
+    isAnalyzingRetrofit.value = false
+  }
+}
 </script>
 
 <template>
   <div class="h-full bg-white">
     <!-- Main Content -->
     <main class="w-full px-4 sm:px-6 lg:px-8 py-8 h-full overflow-auto">
+      <!-- Add Settings Button -->
+      <div class="flex justify-end mb-4">
+        <Sheet :open="isSettingsOpen" @update:open="isSettingsOpen = $event">
+          <SheetTrigger as-child>
+            <Button variant="outline" size="sm" class="flex items-center space-x-2">
+              <Settings class="h-4 w-4" />
+              <span>CO2-Szenarien</span>
+            </Button>
+          </SheetTrigger>
+          
+          <SheetContent side="right" class="w-[400px]">
+            <SheetHeader>
+              <SheetTitle>CO2-Szenarien Einstellungen</SheetTitle>
+              <SheetDescription>
+                Konfigurieren Sie die CO2-Reduktions- und Kostenszenarien für die Analyse.
+              </SheetDescription>
+            </SheetHeader>
+            
+            <div class="space-y-6 py-4">
+              <!-- Error Message -->
+              <div v-if="co2ScenariosError" class="bg-red-50 border border-red-200 rounded-md p-3">
+                <p class="text-sm text-red-600">{{ co2ScenariosError }}</p>
+              </div>
+              
+              <!-- Loading State -->
+              <div v-if="isLoadingCo2Scenarios" class="space-y-4">
+                <Skeleton class="h-4 w-full" />
+                <Skeleton class="h-10 w-full" />
+                <Skeleton class="h-4 w-full" />
+                <Skeleton class="h-10 w-full" />
+              </div>
+              
+              <!-- CO2 Path Scenario Selection -->
+              <div v-else class="space-y-2">
+                <Label for="co2-path-scenario">CO2-Reduktionsszenario</Label>
+                <Select v-model="selectedCo2PathScenario">
+                  <SelectTrigger id="co2-path-scenario">
+                    <SelectValue placeholder="Wählen Sie ein Reduktionsszenario..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem
+                      v-for="scenario in co2PathScenarios"
+                      :key="scenario"
+                      :value="scenario"
+                    >
+                      {{ scenario }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <!-- CO2 Cost Scenario Selection -->
+              <div class="space-y-2">
+                <Label for="co2-cost-scenario">CO2-Kostenszenario</Label>
+                <Select v-model="selectedCo2CostScenario">
+                  <SelectTrigger id="co2-cost-scenario">
+                    <SelectValue placeholder="Wählen Sie ein Kostenszenario..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem
+                      v-for="scenario in co2CostScenarios"
+                      :key="scenario"
+                      :value="scenario"
+                    >
+                      {{ scenario }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            <SheetFooter>
+              <Button @click="isSettingsOpen = false">
+                Schließen
+              </Button>
+            </SheetFooter>
+          </SheetContent>
+        </Sheet>
+      </div>
+      
       <!-- Error Message -->
       <div v-if="searchError" class="mb-4">
         <div class="bg-red-50 border border-red-200 rounded-md p-3">
@@ -1339,6 +1836,31 @@ const modifyRetrofitScenario = () => {
                               <div v-if="!retrofitScenario.energy_standard && !retrofitScenario.hvac" class="text-muted-foreground">
                                 Keine Maßnahmen ausgewählt
                               </div>
+                            </div>
+                            
+                            <!-- Add Analysis Button -->
+                            <div class="pt-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                @click="analyzeRetrofitScenario"
+                                :disabled="isAnalyzingRetrofit"
+                                class="w-full"
+                              >
+                                <template v-if="isAnalyzingRetrofit">
+                                  <span class="animate-spin mr-2">⟳</span>
+                                  Analysiere...
+                                </template>
+                                <template v-else>
+                                  <Zap class="h-4 w-4 mr-2" />
+                                  {{ retrofitScenario ? 'Sanierung analysieren' : 'Status Quo analysieren' }}
+                                </template>
+                              </Button>
+                              
+                              <!-- Show error if any -->
+                              <p v-if="retrofitAnalysisError" class="text-xs text-red-500 mt-1">
+                                {{ retrofitAnalysisError }}
+                              </p>
                             </div>
                           </div>
                         </HoverCardContent>
