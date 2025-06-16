@@ -358,13 +358,24 @@ const fetchGeometry = async (gmlIds: string[]) => {
   geometryError.value = ''
   
   try {
-    // Join multiple GML IDs with comma for the API call
-    const gmlIdParam = gmlIds.join(',')
-    console.log('🔗 API URL:', `${apiBaseUrl.value}/api/geometry/get_geometry?gmlids=${gmlIdParam}`)
+    // Create URLSearchParams object to handle multiple gmlids
+    const params = new URLSearchParams()
     
-    const response = await fetch(
-      `${apiBaseUrl.value}/api/geometry/get_geometry?gmlids=${gmlIdParam}`
-    )
+    // Add each GML ID as a separate gmlids parameter
+    gmlIds.forEach(gmlId => {
+      params.append('gmlids', gmlId)
+    })
+    
+    // Add additional required parameters
+    params.append('building_category', 'Büro-, Verwaltungs- oder Amtsgebäude')
+    params.append('construction_year', '1900')
+    params.append('radius', '50')
+    params.append('calculate_window_areas', 'true')
+    
+    const url = `${apiBaseUrl.value}/api/geometry/get_geometry?${params.toString()}`
+    console.log('🔗 API URL:', url)
+    
+    const response = await fetch(url)
     
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`)
