@@ -5,7 +5,8 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
-import { Bar, Line } from 'vue-chartjs'
+import { Switch } from '@/components/ui/switch'
+import { Bar } from 'vue-chartjs'
 import { Chart as ChartJS, Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale, PointElement, LineElement } from 'chart.js'
 import { Building, Layers, Euro, Leaf, Download } from 'lucide-vue-next'
 
@@ -49,6 +50,7 @@ const activeTab = ref('lca') // 'lca' or 'lcc'
 const viewMode = ref('building') // 'building' or 'component'
 const selectedComponent = ref('facade') // 'facade', 'roof', 'base', 'window', 'hvac'
 const selectedIndicator = ref('gwptotal_a2') // for LCA
+const showPerM2 = ref(false) // toggle between total and per m²
 
 // Available components
 const availableComponents = computed(() => {
@@ -119,13 +121,16 @@ const buildingLevelData = computed(() => {
   let totalGWP = 0
   let totalPERT = 0
   let totalPENRT = 0
+  let totalArea = 0
 
   const componentData = components.map(component => {
     const data = results[component]
     
     // Extract costs from summary
     const cost = data.summary?.total_cost_euro || 0
+    const area = data.summary?.area_m2 || 0
     totalCost += cost
+    totalArea += area
 
     // Extract LCA data from summary or calculate from raw data
     const finalImpacts = data.summary?.final_impacts || {}
@@ -140,11 +145,11 @@ const buildingLevelData = computed(() => {
     return {
       name: getComponentLabel(component),
       component,
-      cost,
-      gwp: gwp,
-      pert: pert,
-      penrt: penrt,
-      area: data.summary?.area_m2 || 0,
+      cost: showPerM2.value && area > 0 ? cost / area : cost,
+      gwp: showPerM2.value && area > 0 ? gwp / area : gwp,
+      pert: showPerM2.value && area > 0 ? pert / area : pert,
+      penrt: showPerM2.value && area > 0 ? penrt / area : penrt,
+      area: area,
       uValueOld: data.summary?.u_value_old || 0,
       uValueNew: data.summary?.u_value_new || 0
     }
@@ -153,10 +158,11 @@ const buildingLevelData = computed(() => {
   return {
     components: componentData,
     totals: {
-      cost: totalCost,
-      gwp: totalGWP,
-      pert: totalPERT,
-      penrt: totalPENRT
+      cost: showPerM2.value && totalArea > 0 ? totalCost / totalArea : totalCost,
+      gwp: showPerM2.value && totalArea > 0 ? totalGWP / totalArea : totalGWP,
+      pert: showPerM2.value && totalArea > 0 ? totalPERT / totalArea : totalPERT,
+      penrt: showPerM2.value && totalArea > 0 ? totalPENRT / totalArea : totalPENRT,
+      area: totalArea
     }
   }
 })
@@ -229,12 +235,13 @@ const buildingComparisonChartData = computed(() => {
 
   const components = buildingLevelData.value.components
   const labels = components.map(c => c.name)
+  const unit = showPerM2.value ? '/m²' : ''
   
   if (activeTab.value === 'lcc') {
     return {
       labels,
       datasets: [{
-        label: 'Lebenszykluskosten (€)',
+        label: `Lebenszykluskosten (€${unit})`,
         data: components.map(c => c.cost),
         backgroundColor: '#3B82F6',
         borderColor: '#2563EB',
@@ -248,7 +255,7 @@ const buildingComparisonChartData = computed(() => {
     return {
       labels,
       datasets: [{
-        label: `${indicatorInfo?.label} (${indicatorInfo?.unit})`,
+        label: `${indicatorInfo?.label} (${indicatorInfo?.unit}${unit})`,
         data: selectedLcaData,
         backgroundColor: '#10B981',
         borderColor: '#059669',
@@ -258,54 +265,123 @@ const buildingComparisonChartData = computed(() => {
   }
 })
 
-// Chart data for LCC timeline
-const lccTimelineChartData = computed(() => {
+// Chart data for year-based stacked materials (LCC)
+const yearBasedLccChartData = computed(() => {
   if (!componentLevelData.value) return null
-  
-  const timeline = componentLevelData.value.lcc.timeline
-  const labels = timeline.map((item: any) => item.year.toString())
-  const data = timeline.map((item: any) => item.totalCost)
-  
+
+  const lccData = componentLevelData.value.lcc.byYear
+  if (!lccData || lccData.length === 0) return null
+
+  // Get all unique materials across all years
+  const allMaterials = new Set()
+  lccData.forEach((yearData: any) => {
+    yearData.materials.forEach((material: any) => {
+      allMaterials.add(material.name)
+    })
+  })
+
+  const materialColors = [
+    '#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6',
+    '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'
+  ]
+
+  const datasets = Array.from(allMaterials).map((materialName, index) => ({
+    label: materialName as string,
+    data: lccData.map((yearData: any) => {
+      const material = yearData.materials.find((m: any) => m.name === materialName)
+      if (!material) return 0
+      // Use existing per m² values from JSON
+      return showPerM2.value ? (material.cost_per_m2 || 0) : (material.total_cost || 0)
+    }),
+    backgroundColor: materialColors[index % materialColors.length],
+    borderColor: materialColors[index % materialColors.length],
+    borderWidth: 1
+  }))
+
   return {
-    labels,
-    datasets: [{
-      label: 'Kosten (€)',
-      data,
-      borderColor: '#F59E0B',
-      backgroundColor: 'rgba(245, 158, 11, 0.1)',
-      borderWidth: 2,
-      fill: true
-    }]
+    labels: lccData.map((yearData: any) => yearData.year.toString()),
+    datasets
   }
 })
 
-// Chart data for LCA by indicator
-const lcaIndicatorChartData = computed(() => {
+// Chart data for year-based stacked materials (LCA)
+const yearBasedLcaChartData = computed(() => {
   if (!componentLevelData.value) return null
-  
-  const data = componentLevelData.value.lca.byIndicator || {}
+
+  const lcaData = componentLevelData.value.lca.byIndicator || {}
   const indicator = selectedIndicator.value
   
-  if (!data[indicator]) return null
+  if (!lcaData[indicator]) return null
 
-  const materials = data[indicator].materials
-  const labels = materials.map((material: any) => material.name)
-  const values = materials.map((material: any) => material.value)
-  
+  // Group LCA data by replacement year
+  const materialsByYear: Record<number, any[]> = {}
+  lcaData[indicator].materials.forEach((material: any) => {
+    const year = material.replacementYear || 2030 // Default to 2030 if no replacement year
+    if (!materialsByYear[year]) {
+      materialsByYear[year] = []
+    }
+    materialsByYear[year].push(material)
+  })
+
+  const years = Object.keys(materialsByYear).sort((a, b) => parseInt(a) - parseInt(b))
+  const allMaterials = new Set()
+  Object.values(materialsByYear).forEach(materials => {
+    materials.forEach(material => allMaterials.add(material.name))
+  })
+
+  const materialColors = [
+    '#10B981', '#EF4444', '#3B82F6', '#F59E0B', '#8B5CF6',
+    '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'
+  ]
+
+  const datasets = Array.from(allMaterials).map((materialName, index) => ({
+    label: materialName as string,
+    data: years.map(year => {
+      const material = materialsByYear[parseInt(year)]?.find((m: any) => m.name === materialName)
+      return material ? material.value : 0
+    }),
+    backgroundColor: materialColors[index % materialColors.length],
+    borderColor: materialColors[index % materialColors.length],
+    borderWidth: 1
+  }))
+
   return {
-    labels,
-    datasets: [{
-      label: lcaIndicators.find(i => i.key === selectedIndicator.value)?.unit || '',
-      data: values,
-      backgroundColor: '#8B5CF6',
-      borderColor: '#7C3AED',
-      borderWidth: 1
-    }]
+    labels: years,
+    datasets
   }
+})
+
+// Construction layer visualization data
+const constructionLayersData = computed(() => {
+  if (!componentLevelData.value) return null
+
+  const results = effectiveLcaLccResults.value
+  if (!results || !selectedComponent.value) return null
+
+  const componentData = results[selectedComponent.value]
+  if (!componentData?.construction_dimensions) return null
+
+  const layers = componentData.construction_dimensions.sort((a: any, b: any) => a.position_number - b.position_number)
+  
+  let cumulativeThickness = 0
+  return layers.map((layer: any) => {
+    const layerData = {
+      name: layer.name_de,
+      position: layer.position_number,
+      thickness: layer.thickness_m,
+      lifespan: layer.lifespan,
+      startPosition: cumulativeThickness,
+      endPosition: cumulativeThickness + layer.thickness_m,
+      layerDimensions: layer.layer_dimensions,
+      uuid: layer.uuid
+    }
+    cumulativeThickness += layer.thickness_m
+    return layerData
+  })
 })
 
 // Chart options
-const chartOptions = {
+const chartOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
@@ -315,10 +391,11 @@ const chartOptions = {
     tooltip: {
       callbacks: {
         label: function(context: any) {
+          const unit = showPerM2.value ? '/m²' : ''
           if (activeTab.value === 'lcc') {
-            return `${context.dataset.label}: ${formatCurrency(context.parsed.y)}`
+            return `${context.dataset.label}: ${formatCurrency(context.parsed.y)}${unit}`
           } else {
-            return `${context.dataset.label}: ${formatNumber(context.parsed.y)}`
+            return `${context.dataset.label}: ${formatNumber(context.parsed.y)}${unit}`
           }
         }
       }
@@ -329,7 +406,39 @@ const chartOptions = {
       beginAtZero: true
     }
   }
-}
+}))
+
+// Stacked chart options for year-based charts
+const stackedChartOptions = computed(() => ({
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      position: 'top' as const,
+    },
+    tooltip: {
+      callbacks: {
+        label: function(context: any) {
+          const unit = showPerM2.value ? '/m²' : ''
+          if (activeTab.value === 'lcc') {
+            return `${context.dataset.label}: ${formatCurrency(context.parsed.y)}${unit}`
+          } else {
+            return `${context.dataset.label}: ${formatNumber(context.parsed.y)}${unit}`
+          }
+        }
+      }
+    }
+  },
+  scales: {
+    x: {
+      stacked: true,
+    },
+    y: {
+      stacked: true,
+      beginAtZero: true
+    }
+  }
+}))
 
 // Export functions
 const exportData = () => {
@@ -434,6 +543,17 @@ const exportData = () => {
             </Select>
           </div>
         </div>
+        
+        <!-- Per m² Toggle -->
+        <div class="mt-4 flex items-center space-x-2">
+          <Switch 
+            id="per-m2-toggle"
+            v-model:checked="showPerM2"
+          />
+          <Label for="per-m2-toggle" class="text-sm">
+            Pro m² anzeigen
+          </Label>
+        </div>
       </CardContent>
     </Card>
 
@@ -459,11 +579,13 @@ const exportData = () => {
         <!-- Total Cost Card -->
         <Card v-if="activeTab === 'lcc'">
           <CardHeader class="pb-2">
-            <CardTitle class="text-sm font-medium">Gesamtkosten</CardTitle>
+            <CardTitle class="text-sm font-medium">
+              {{ showPerM2 ? 'Kosten pro m²' : 'Gesamtkosten' }}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div class="text-2xl font-bold">
-              {{ formatCurrency(buildingLevelData.totals.cost) }}
+              {{ formatCurrency(buildingLevelData.totals.cost) }}{{ showPerM2 ? '/m²' : '' }}
             </div>
             <p class="text-xs text-muted-foreground">Lebenszykluskosten</p>
           </CardContent>
@@ -478,7 +600,9 @@ const exportData = () => {
             <div class="text-2xl font-bold">
               {{ formatNumber(buildingLevelData.totals.gwp / 1000, 1) }}
             </div>
-            <p class="text-xs text-muted-foreground">t CO₂ eq</p>
+            <p class="text-xs text-muted-foreground">
+              t CO₂ eq{{ showPerM2 ? '/m²' : '' }}
+            </p>
           </CardContent>
         </Card>
 
@@ -491,7 +615,9 @@ const exportData = () => {
             <div class="text-2xl font-bold">
               {{ formatNumber(buildingLevelData.totals.pert / 1000000, 1) }}
             </div>
-            <p class="text-xs text-muted-foreground">GJ</p>
+            <p class="text-xs text-muted-foreground">
+              GJ{{ showPerM2 ? '/m²' : '' }}
+            </p>
           </CardContent>
         </Card>
 
@@ -504,7 +630,9 @@ const exportData = () => {
             <div class="text-2xl font-bold">
               {{ formatNumber(buildingLevelData.totals.penrt / 1000000, 1) }}
             </div>
-            <p class="text-xs text-muted-foreground">GJ</p>
+            <p class="text-xs text-muted-foreground">
+              GJ{{ showPerM2 ? '/m²' : '' }}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -515,15 +643,15 @@ const exportData = () => {
           <CardTitle>Vergleich nach Bauteilen</CardTitle>
           <CardDescription>
             {{ activeTab === 'lca' ? 'Umweltauswirkungen' : 'Lebenszykluskosten' }} aufgeschlüsselt nach Bauteilen
+            {{ showPerM2 ? '(pro m²)' : '(Gesamtwerte)' }}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div class="h-80">
-            <Bar 
-              v-if="buildingComparisonChartData"
-              :data="buildingComparisonChartData" 
-              :options="chartOptions"
-            />
+          <div class="h-80">              <Bar 
+                v-if="buildingComparisonChartData"
+                :data="buildingComparisonChartData" 
+                :options="chartOptions"
+              />
           </div>
         </CardContent>
       </Card>
@@ -540,8 +668,13 @@ const exportData = () => {
                 <tr class="border-b">
                   <th class="text-left p-2">Bauteil</th>
                   <th class="text-right p-2">Fläche (m²)</th>
-                  <th class="text-right p-2" v-if="activeTab === 'lcc'">Kosten (€)</th>
-                  <th class="text-right p-2" v-if="activeTab === 'lca'">{{ lcaIndicators.find(i => i.key === selectedIndicator)?.label }}</th>
+                  <th class="text-right p-2" v-if="activeTab === 'lcc'">
+                    {{ showPerM2 ? 'Kosten (€/m²)' : 'Kosten (€)' }}
+                  </th>
+                  <th class="text-right p-2" v-if="activeTab === 'lca'">
+                    {{ lcaIndicators.find(i => i.key === selectedIndicator)?.label }}
+                    {{ showPerM2 ? ' (pro m²)' : '' }}
+                  </th>
                   <th class="text-right p-2">U-Wert alt</th>
                   <th class="text-right p-2">U-Wert neu</th>
                 </tr>
@@ -596,31 +729,122 @@ const exportData = () => {
       <!-- LCC Timeline Chart -->
       <Card v-if="activeTab === 'lcc'">
         <CardHeader>
-          <CardTitle>Kostenentwicklung über Lebenszyklus</CardTitle>
+          <CardTitle>Kostenentwicklung über Lebenszyklus (gestapelt nach Materialien)</CardTitle>
+          <CardDescription>
+            Materialkosten aufgeschlüsselt nach Jahren und Materialien 
+            {{ showPerM2 ? '(pro m²)' : '(Gesamtwerte)' }}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div class="h-80">
-            <Line 
-              v-if="lccTimelineChartData"
-              :data="lccTimelineChartData" 
-              :options="chartOptions"
+            <Bar 
+              v-if="yearBasedLccChartData"
+              :data="yearBasedLccChartData" 
+              :options="stackedChartOptions"
             />
           </div>
         </CardContent>
       </Card>
 
-      <!-- LCA Materials Chart -->
+      <!-- LCA Materials Chart by Year -->
       <Card v-if="activeTab === 'lca'">
         <CardHeader>
-          <CardTitle>{{ lcaIndicators.find(i => i.key === selectedIndicator)?.label }} nach Materialien</CardTitle>
+          <CardTitle>{{ lcaIndicators.find(i => i.key === selectedIndicator)?.label }} nach Materialien und Jahren</CardTitle>
+          <CardDescription>
+            Umweltauswirkungen gestapelt nach Jahren und Materialien 
+            {{ showPerM2 ? '(pro m²)' : '(Gesamtwerte)' }}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div class="h-80">
             <Bar 
-              v-if="lcaIndicatorChartData"
-              :data="lcaIndicatorChartData" 
-              :options="chartOptions"
+              v-if="yearBasedLcaChartData"
+              :data="yearBasedLcaChartData" 
+              :options="stackedChartOptions"
             />
+          </div>
+        </CardContent>
+      </Card>
+
+      <!-- Construction Layers Visualization -->
+      <Card>
+        <CardHeader>
+          <CardTitle>{{ getComponentLabel(selectedComponent) }} - Schichtaufbau</CardTitle>
+          <CardDescription>Visualisierung der Konstruktionsschichten mit Dimensionen</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div class="h-60 relative border rounded-lg bg-gray-50 overflow-hidden">
+            <div 
+              v-if="constructionLayersData" 
+              class="h-full flex items-center justify-center relative"
+            >
+              <!-- Layer visualization -->
+              <div class="relative w-full h-32 border-2 border-gray-300 bg-white">
+                <div
+                  v-for="(layer, index) in constructionLayersData"
+                  :key="layer.uuid"
+                  class="absolute h-full border-r-2 border-gray-400 cursor-pointer transition-all hover:bg-blue-100"
+                  :style="{
+                    left: `${(layer.startPosition / constructionLayersData[constructionLayersData.length - 1].endPosition) * 100}%`,
+                    width: `${(layer.thickness / constructionLayersData[constructionLayersData.length - 1].endPosition) * 100}%`,
+                    backgroundColor: `hsl(${(index * 360) / constructionLayersData.length}, 60%, 90%)`,
+                    borderLeftColor: `hsl(${(index * 360) / constructionLayersData.length}, 60%, 50%)`
+                  }"
+                  :title="`${layer.name} - ${formatNumber(layer.thickness * 1000, 1)}mm - Lebensdauer: ${layer.lifespan} Jahre`"
+                >
+                  <!-- Hash pattern for better visibility -->
+                  <div 
+                    class="absolute inset-0 opacity-30"
+                    :style="{
+                      background: `repeating-linear-gradient(45deg, transparent, transparent 2px, hsl(${(index * 360) / constructionLayersData.length}, 60%, 50%) 2px, hsl(${(index * 360) / constructionLayersData.length}, 60%, 50%) 4px)`
+                    }"
+                  ></div>
+                  
+                  <!-- Layer number -->
+                  <div class="absolute inset-0 flex items-center justify-center text-xs font-bold text-gray-800">
+                    {{ layer.position }}
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Dimension labels -->
+              <div class="absolute -bottom-6 left-0 right-0 h-6 flex">
+                <div
+                  v-for="layer in constructionLayersData"
+                  :key="`label-${layer.uuid}`"
+                  class="text-xs text-center border-l border-gray-300 flex items-center justify-center"
+                  :style="{
+                    width: `${(layer.thickness / constructionLayersData[constructionLayersData.length - 1].endPosition) * 100}%`
+                  }"
+                >
+                  {{ formatNumber(layer.thickness * 1000, 0) }}mm
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Layer details table -->
+          <div v-if="constructionLayersData" class="mt-6 overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b">
+                  <th class="text-left p-2">Position</th>
+                  <th class="text-left p-2">Material</th>
+                  <th class="text-right p-2">Dicke (mm)</th>
+                  <th class="text-right p-2">Lebensdauer (Jahre)</th>
+                  <th class="text-right p-2">Schichtdimensionen</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="layer in constructionLayersData" :key="layer.uuid" class="border-b hover:bg-gray-50">
+                  <td class="p-2 font-medium">{{ layer.position }}</td>
+                  <td class="p-2">{{ layer.name }}</td>
+                  <td class="text-right p-2">{{ formatNumber(layer.thickness * 1000, 1) }}</td>
+                  <td class="text-right p-2">{{ layer.lifespan }}</td>
+                  <td class="text-right p-2">{{ formatNumber(layer.layerDimensions, 1) }}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </CardContent>
       </Card>
