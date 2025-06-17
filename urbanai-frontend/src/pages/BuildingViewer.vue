@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { useRetrofitAnalysis } from '@/composables/useRetrofitAnalysis'
+import { useEnergyMetricsCards } from '@/composables/useEnergyMetricsCards'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -86,12 +88,37 @@ const selectedHVACType = ref<string>('')
 const selectedHVAC = ref<string>('')
 const hvacYear = ref<string>('')
 
-// Add these state variables after other ref declarations
-const isAnalyzingRetrofit = ref(false)
-const retrofitAnalysisError = ref('')
-const retrofitAnalysisResult = ref<any>(null)
+// Use composables
+const { 
+  isAnalyzingRetrofit, 
+  retrofitAnalysisError, 
+  retrofitAnalysisResult, 
+  analyzeBaseScenario, 
+  analyzeRetrofitScenario 
+} = useRetrofitAnalysis()
 
-// Add these state variables after other ref declarations
+const { 
+  selectedEnergyType, 
+  selectedEnergyUnit, 
+  selectedEmissionType, 
+  selectedEmissionUnit, 
+  selectedCostType, 
+  selectedCostUnit,
+  formatNumber,
+  getImprovementColorClass,
+  getRiskColorClass,
+  createCardData
+} = useEnergyMetricsCards()
+
+// Create card data using the composable
+const { 
+  energyCardData, 
+  emissionCardData, 
+  strandingCardData, 
+  costCardData 
+} = createCardData(computed(() => retrofitAnalysisResult.value))
+
+// Settings and CO2 scenarios state (not moved to composables yet)
 const isSettingsOpen = ref(false)
 const co2PathScenarios = ref<string[]>([])
 const co2CostScenarios = ref<string[]>([])
@@ -204,48 +231,6 @@ interface RetrofitScenario {
   hvac_year: string | null
 }
 
-// Add this interface before the analyzeRetrofitScenario function
-interface GmlMapping {
-  gebid: string
-  gmlid: string
-  epl: string | null
-  babez: string | null
-  gebzabt: string | null
-  ligbez: string | null
-  geprueft: string
-  kontrollbedarf: string
-  konsistent_citygml_fdh: string
-  kommentar: string | null
-  bearbeitungsbedarf_ldbv: string | null
-  fdh_merge: string | null
-  edited_at: string
-}
-
-// Add interface for the API payload
-interface RetrofitAnalysisPayload {
-  building_id: string
-  gebplz: string
-  building_category: string
-  construction_year: number
-  geometry_data: any  // Accept geometry data as-is from API
-  gmlid_list: string[]  // Keep at root level as API expects
-  system_type: string
-  retrofit_scenario_construction?: string | null
-  retrofit_construction_year?: number | null
-  retrofit_system_type?: string
-  retrofit_subsystem_type: string
-  retrofit_hvac_year?: number | null
-  window_construction?: string
-  wall_construction?: string
-  roof_construction?: string
-  base_construction?: string
-  co2_reduction_scenario: string
-  co2_cost_scenario: string
-}
-
-// Add type for system types
-type SystemType = 'Öl/Gas' | 'Wärmepumpe' | 'Fernwärme' | 'Biomasse'
-
 // Get building category directly from database (no mapping needed)
 const getBuildingCategory = (assumptions: any): string => {
   const enobCategory = assumptions?.enob_category
@@ -355,8 +340,11 @@ watch(() => {
     console.error('Error accessing route in watcher:', err)
     return [null, null, null]
   }
-}, ([paramGebid, queryGebid, path], [oldParamGebid, oldQueryGebid, oldPath]) => {
+}, (newValues, oldValues) => {
   try {
+    const [paramGebid, queryGebid, path] = newValues || [null, null, null]
+    const [oldParamGebid, oldQueryGebid, oldPath] = oldValues || [null, null, null]
+    
     const newGebid = paramGebid || queryGebid
     const oldGebid = oldParamGebid || oldQueryGebid
     
@@ -479,7 +467,14 @@ const fetchGeometry = async (gmlIds: string[]) => {
     
     // Automatically trigger base scenario analysis after geometry is loaded
     console.log('🚀 Geometry loaded successfully, triggering base scenario analysis...')
-    analyzeBaseScenario().catch(err => {
+    analyzeBaseScenario(
+      buildingData.value,
+      geometryData.value,
+      co2PathScenarios.value,
+      co2CostScenarios.value,
+      selectedCo2PathScenario.value,
+      selectedCo2CostScenario.value
+    ).catch(err => {
       console.error('❌ Base scenario analysis failed:', err)
       // Don't show error toast here as it's automatic - just log it
     })
@@ -977,264 +972,32 @@ const fetchCo2Scenarios = async () => {
   }
 }
 
-// Analyze base scenario (status quo) automatically after geometry is loaded
-const analyzeBaseScenario = async () => {
-  try {
-    if (!buildingData.value || !geometryData.value?.results) {
-      console.log('❌ Missing building or geometry data for base scenario analysis')
-      return
-    }
+// Debug: Watch for changes in analysis results
+watch(retrofitAnalysisResult, (newValue) => {
+  console.log('🔄 RetrofitAnalysisResult changed:', {
+    hasValue: !!newValue,
+    hasFrontendData: !!newValue?.frontend_data,
+    frontendDataKeys: newValue?.frontend_data ? Object.keys(newValue.frontend_data) : null,
+    hasCards: !!newValue?.frontend_data?.cards,
+    cardsKeys: newValue?.frontend_data?.cards ? Object.keys(newValue.frontend_data.cards) : null,
+    fullStructure: newValue
+  })
+}, { deep: true })
 
-    console.log('🏗️ Starting base scenario analysis...')
-    isAnalyzingRetrofit.value = true
-    retrofitAnalysisError.value = ''
-    retrofitAnalysisResult.value = null
-
-    // Extract required data from building assumptions
-    const assumptions = buildingData.value.buildings_assumptions
-    const gebplz = assumptions.gebid?.split(' ')[0] || ''
-
-    // Debug: Log all building assumptions
-    console.log('🏗️ Building assumptions for base scenario:', assumptions)
-    console.log('🏢 enob_category value:', assumptions?.enob_category)
-    console.log('📅 epl value:', assumptions?.epl)
-
-    // Get GML IDs
-    const gmlIds = buildingData.value.gmlid_gebid_mapping.map((mapping: GmlMapping) => mapping.gmlid)
-
-    // Extract actual building data instead of hard-coded values
-    const actualBuildingCategory = getBuildingCategory(assumptions)
-    const actualConstructionYear = parseConstructionYear(assumptions?.epl)
-
-    console.log('🔍 Processed values:')
-    console.log('   actualBuildingCategory:', actualBuildingCategory)
-    console.log('   actualConstructionYear:', actualConstructionYear)
-    console.log('   gebplz:', gebplz)
-    console.log('   gmlIds:', gmlIds)
-
-    // Create a copy of geometry data to ensure we're not modifying the original
-    const geometryDataCopy = { ...geometryData.value.results }
-
-    console.log('📊 Geometry data structure being sent:')
-    console.log('   geometryData keys:', Object.keys(geometryDataCopy))
-    console.log('   geometryData sample:', {
-      buildings: geometryDataCopy.buildings ? 'present' : 'missing',
-      surface_areas: geometryDataCopy.surface_areas ? 'present' : 'missing',
-      summed_surface_areas: geometryDataCopy.summed_surface_areas ? 'present' : 'missing'
+// Debug: Watch for changes in card data
+watch([energyCardData, emissionCardData, strandingCardData, costCardData], 
+  ([energy, emission, stranding, cost]) => {
+    console.log('📊 Card data updated:', {
+      energyCardData: !!energy,
+      emissionCardData: !!emission,
+      strandingCardData: !!stranding,
+      costCardData: !!cost,
+      energyData: energy,
+      emissionData: emission,
+      strandingData: stranding,
+      costData: cost
     })
-
-    // Prepare the request payload for base scenario (status quo)
-    const payload: RetrofitAnalysisPayload = {
-      building_id: assumptions.gebid,
-      gebplz: gebplz,
-      building_category: actualBuildingCategory,
-      construction_year: actualConstructionYear,
-      geometry_data: geometryDataCopy,
-      gmlid_list: gmlIds,
-      system_type: 'Öl/Gas', // Default for base scenario
-      retrofit_subsystem_type: 'Gas', // Default for base scenario
-      co2_reduction_scenario: selectedCo2PathScenario.value,
-      co2_cost_scenario: selectedCo2CostScenario.value
-    }
-
-    console.log('📤 Sending base scenario payload:', payload)
-
-    const response = await fetch(`${apiBaseUrl.value}/api/energy/analyze-retrofit`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    })
-
-    console.log('📥 Base scenario response status:', response.status)
-
-    if (!response.ok) {
-      // Try to get detailed error message from response
-      let errorDetail = ''
-      try {
-        const errorData = await response.json()
-        console.error('❌ Base scenario error response:', errorData)
-        
-        if (Array.isArray(errorData.detail)) {
-          errorDetail = errorData.detail.map((err: any) => 
-            `${err.loc.join('.')}: ${err.msg} (${err.type})`
-          ).join('\n')
-        } else {
-          errorDetail = errorData.detail || JSON.stringify(errorData)
-        }
-      } catch (e) {
-        errorDetail = `HTTP error! status: ${response.status}`
-      }
-
-      throw new Error(errorDetail)
-    }
-
-    const data = await response.json()
-    console.log('✅ Base scenario analysis response:', data)
-    
-    retrofitAnalysisResult.value = data
-
-    console.log('🎯 Base scenario analysis completed successfully')
-
-  } catch (err) {
-    console.error('❌ Base scenario analysis error:', err)
-    // Don't show error toast for automatic analysis - just log the error
-    retrofitAnalysisError.value = `Base scenario analysis failed: ${err instanceof Error ? err.message : 'Unknown error'}`
-  } finally {
-    isAnalyzingRetrofit.value = false
-  }
-}
-
-// Modify the analyzeRetrofitScenario function to use geometry data as-is
-const analyzeRetrofitScenario = async () => {
-  try {
-    if (!buildingData.value || !geometryData.value?.results) {
-      retrofitAnalysisError.value = 'Fehlende Gebäudedaten für die Analyse'
-      return
-    }
-
-    isAnalyzingRetrofit.value = true
-    retrofitAnalysisError.value = ''
-    retrofitAnalysisResult.value = null
-
-    // Extract required data from building assumptions
-    const assumptions = buildingData.value.buildings_assumptions
-    const gebplz = assumptions.gebid?.split(' ')[0] || ''
-
-    // Get GML IDs
-    const gmlIds = buildingData.value.gmlid_gebid_mapping.map((mapping: GmlMapping) => mapping.gmlid)
-
-    // Log the current state and data structures
-    console.log('🔍 Current state:', {
-      retrofitScenario: retrofitScenario.value,
-      selectedCo2Path: selectedCo2PathScenario.value,
-      selectedCo2Cost: selectedCo2CostScenario.value,
-      selectedHVACType: selectedHVACType.value,
-      selectedHVAC: selectedHVAC.value,
-      hvacType: retrofitScenario.value?.hvac?.hvac_type,
-      geometryData: geometryData.value.results,
-      gmlIds
-    })
-
-    // Log the raw geometry data structure
-    console.log('📊 Raw geometry data structure:', {
-      keys: Object.keys(geometryData.value.results),
-      hasGmlIdList: 'gmlid_list' in geometryData.value.results,
-      geometryDataValue: geometryData.value.results
-    })
-
-    // Get the HVAC type from the selected HVAC item if available
-    const selectedHVACItem = retrofitScenario.value?.hvac 
-      ? getHVACOptions.value.find(item => item.hvac_number === retrofitScenario.value?.hvac?.hvac_number)
-      : null
-
-    // Map HVAC type to valid system type
-    const mapToSystemType = (type: string | undefined): SystemType => {
-      if (!type) return 'Öl/Gas' // Default to Öl/Gas if no type selected
-      const validTypes: SystemType[] = ['Öl/Gas', 'Wärmepumpe', 'Fernwärme', 'Biomasse']
-      return validTypes.includes(type as SystemType) ? (type as SystemType) : 'Öl/Gas'
-    }
-
-    // Get the system type from the selected HVAC type
-    const systemType = mapToSystemType(selectedHVACType.value)
-
-    // Extract actual building data instead of hard-coded values
-    const actualBuildingCategory = getBuildingCategory(assumptions)
-    const actualConstructionYear = parseConstructionYear(assumptions?.epl)
-
-    // Create a copy of geometry data to ensure we're not modifying the original
-    const geometryDataCopy = { ...geometryData.value.results }
-
-    // Prepare the request payload according to API requirements
-    const payload: RetrofitAnalysisPayload = {
-      building_id: assumptions.gebid,
-      gebplz: gebplz,
-      building_category: actualBuildingCategory,
-      construction_year: actualConstructionYear,
-      geometry_data: geometryDataCopy,  // Use copy of geometry data
-      gmlid_list: gmlIds,  // Keep at root level
-      system_type: systemType,
-      retrofit_subsystem_type: selectedHVACItem?.hvac_type || 'Gas',
-      co2_reduction_scenario: selectedCo2PathScenario.value,
-      co2_cost_scenario: selectedCo2CostScenario.value
-    }
-
-    // Log the exact payload being sent
-    console.log('📤 Sending payload:', JSON.stringify(payload, null, 2))
-    console.log('📤 Payload structure:', {
-      hasGeometryData: 'geometry_data' in payload,
-      geometryDataKeys: Object.keys(payload.geometry_data),
-      hasGmlIdList: 'gmlid_list' in payload,
-      gmlIdListLocation: 'gmlid_list' in payload.geometry_data ? 'inside geometry_data' : 'at root level'
-    })
-
-    const response = await fetch(`${apiBaseUrl.value}/api/energy/analyze-retrofit`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    })
-
-    // Log the response status and headers
-    console.log('📥 Response status:', response.status)
-    console.log('📥 Response headers:', Object.fromEntries(response.headers.entries()))
-
-    if (!response.ok) {
-      // Try to get detailed error message from response
-      let errorDetail = ''
-      try {
-        const errorData = await response.json()
-        console.error('❌ Error response data:', errorData)
-        console.error('❌ Error payload that caused the error:', JSON.stringify(payload, null, 2))
-        
-        // Format validation errors in a more readable way
-        if (Array.isArray(errorData.detail)) {
-          errorDetail = errorData.detail.map((err: any) => 
-            `${err.loc.join('.')}: ${err.msg} (${err.type})`
-          ).join('\n')
-        } else {
-          errorDetail = errorData.detail || JSON.stringify(errorData)
-        }
-      } catch (e) {
-        errorDetail = `HTTP error! status: ${response.status}`
-      }
-
-      throw new Error(errorDetail)
-    }
-
-    const data = await response.json()
-    console.log('✅ Retrofit analysis response:', data)
-    
-    retrofitAnalysisResult.value = data
-
-    // Show appropriate success message based on whether we analyzed a scenario or status quo
-    const message = retrofitScenario.value 
-      ? 'Die Sanierungsanalyse wurde erfolgreich durchgeführt.'
-      : 'Die Status-Quo-Analyse wurde erfolgreich durchgeführt.'
-    
-    toast.success('Analyse erfolgreich', {
-      description: message
-    })
-
-  } catch (err) {
-    console.error('❌ Retrofit analysis error:', err)
-    // Show more detailed error message
-    const errorMessage = err instanceof Error 
-      ? err.message
-      : 'Unbekannter Fehler'
-    
-    retrofitAnalysisError.value = `Analyse fehlgeschlagen: ${errorMessage}`
-    
-    // Show error toast with more details
-    toast.error('Analyse fehlgeschlagen', {
-      description: retrofitAnalysisError.value
-    })
-  } finally {
-    isAnalyzingRetrofit.value = false
-  }
-}
+  }, { deep: true })
 </script>
 
 <template>
@@ -1843,7 +1606,14 @@ const analyzeRetrofitScenario = async () => {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                @click="analyzeRetrofitScenario"
+                                @click="() => analyzeRetrofitScenario(
+                                  buildingData,
+                                  geometryData,
+                                  retrofitScenario,
+                                  selectedCo2PathScenario,
+                                  selectedCo2CostScenario,
+                                  getHVACOptions
+                                )"
                                 :disabled="isAnalyzingRetrofit"
                                 class="w-full"
                               >
@@ -2030,66 +1800,286 @@ const analyzeRetrofitScenario = async () => {
         <!-- Energy Metrics Cards -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
           <!-- Energiebedarf Card -->
-          <Card class="h-32">
+          <Card class="min-h-32">
             <CardHeader class="pb-2">
               <div class="flex items-center justify-between">
                 <CardTitle class="text-sm font-medium text-foreground">Energiebedarf</CardTitle>
-                <Zap class="h-4 w-4 text-muted-foreground" />
+                <HoverCard>
+                  <HoverCardTrigger>
+                    <Zap class="h-4 w-4 text-muted-foreground cursor-help" />
+                  </HoverCardTrigger>
+                  <HoverCardContent side="top" class="w-80">
+                    <div class="space-y-2">
+                      <h4 class="font-medium">Energiebedarf Optionen</h4>
+                      
+                      <!-- Energy Type Selection -->
+                      <div class="space-y-2">
+                        <Label class="text-xs">Energietyp</Label>
+                        <Select v-model="selectedEnergyType" v-if="energyCardData?.options">
+                          <SelectTrigger class="h-8">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem
+                              v-for="type in energyCardData.options.energy_types"
+                              :key="type.key"
+                              :value="type.key"
+                            >
+                              {{ type.label }}
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <!-- Unit Selection -->
+                      <div class="space-y-2">
+                        <Label class="text-xs">Einheit</Label>
+                        <Select v-model="selectedEnergyUnit" v-if="energyCardData?.options">
+                          <SelectTrigger class="h-8">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem
+                              v-for="unit in energyCardData.options.units"
+                              :key="unit.key"
+                              :value="unit.key"
+                            >
+                              {{ unit.label }}
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </HoverCardContent>
+                </HoverCard>
               </div>
             </CardHeader>
             <CardContent>
-              <div class="text-2xl font-bold">
+              <div v-if="energyCardData" class="space-y-2">
+                <!-- Baseline Value -->
+                <div class="text-2xl font-bold">
+                  {{ formatNumber(energyCardData.baseline.value) }}
+                </div>
+                <p class="text-xs text-muted-foreground">{{ energyCardData.baseline.unit }}</p>
+                
+                <!-- Scenario Improvements -->
+                <div v-if="energyCardData.scenarios.length > 0" class="space-y-1">
+                  <div v-for="scenario in energyCardData.scenarios" :key="scenario.name" 
+                       class="flex justify-between text-xs">
+                    <span class="truncate">{{ scenario.name }}:</span>
+                    <span :class="getImprovementColorClass(scenario.improvement)">
+                      {{ scenario.improvement > 0 ? '+' : '' }}{{ formatNumber(scenario.improvement, 1) }}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="text-2xl font-bold">
                 <Skeleton class="h-6 w-16" />
               </div>
-              <p class="text-xs text-muted-foreground mt-1">kWh/m²·a</p>
             </CardContent>
           </Card>
           
           <!-- Emissionen Card -->
-          <Card class="h-32">
+          <Card class="min-h-32">
             <CardHeader class="pb-2">
               <div class="flex items-center justify-between">
-                <CardTitle class="text-sm font-medium text-foreground">Emissionen</CardTitle>
-                <Factory class="h-4 w-4 text-muted-foreground" />
+                <CardTitle class="text-sm font-medium text-foreground">CO₂-Emissionen</CardTitle>
+                <HoverCard>
+                  <HoverCardTrigger>
+                    <Factory class="h-4 w-4 text-muted-foreground cursor-help" />
+                  </HoverCardTrigger>
+                  <HoverCardContent side="top" class="w-80">
+                    <div class="space-y-2">
+                      <h4 class="font-medium">Emissions Optionen</h4>
+                      
+                      <!-- Emission Type Selection -->
+                      <div class="space-y-2">
+                        <Label class="text-xs">Emissionstyp</Label>
+                        <Select v-model="selectedEmissionType" v-if="emissionCardData?.options">
+                          <SelectTrigger class="h-8">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem
+                              v-for="type in emissionCardData.options.emission_types"
+                              :key="type.key"
+                              :value="type.key"
+                            >
+                              {{ type.label }}
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <!-- Unit Selection -->
+                      <div class="space-y-2">
+                        <Label class="text-xs">Einheit</Label>
+                        <Select v-model="selectedEmissionUnit" v-if="emissionCardData?.options">
+                          <SelectTrigger class="h-8">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem
+                              v-for="unit in emissionCardData.options.units"
+                              :key="unit.key"
+                              :value="unit.key"
+                            >
+                              {{ unit.label }}
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </HoverCardContent>
+                </HoverCard>
               </div>
             </CardHeader>
             <CardContent>
-              <div class="text-2xl font-bold">
+              <div v-if="emissionCardData" class="space-y-2">
+                <!-- Baseline Value -->
+                <div class="text-2xl font-bold">
+                  {{ formatNumber(emissionCardData.baseline.value, 3) }}
+                </div>
+                <p class="text-xs text-muted-foreground">{{ emissionCardData.baseline.unit }}</p>
+                
+                <!-- Scenario Improvements -->
+                <div v-if="emissionCardData.scenarios.length > 0" class="space-y-1">
+                  <div v-for="scenario in emissionCardData.scenarios" :key="scenario.name" 
+                       class="flex justify-between text-xs">
+                    <span class="truncate">{{ scenario.name }}:</span>
+                    <span :class="getImprovementColorClass(scenario.improvement)">
+                      {{ scenario.improvement > 0 ? '+' : '' }}{{ formatNumber(scenario.improvement, 1) }}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="text-2xl font-bold">
                 <Skeleton class="h-6 w-16" />
               </div>
-              <p class="text-xs text-muted-foreground mt-1">kg CO₂/m²·a</p>
             </CardContent>
           </Card>
           
           <!-- Stranding Card -->
-          <Card class="h-32">
+          <Card class="min-h-32">
             <CardHeader class="pb-2">
               <div class="flex items-center justify-between">
-                <CardTitle class="text-sm font-medium text-foreground">Stranding</CardTitle>
+                <CardTitle class="text-sm font-medium text-foreground">Stranding Risiko</CardTitle>
                 <AlertTriangle class="h-4 w-4 text-muted-foreground" />
               </div>
             </CardHeader>
             <CardContent>
-              <div class="text-2xl font-bold">
+              <div v-if="strandingCardData" class="space-y-2">
+                <!-- Baseline Value -->
+                <div class="text-2xl font-bold" :class="getRiskColorClass(strandingCardData.baseline.riskLevel)">
+                  {{ formatNumber(strandingCardData.baseline.value, 1) }}
+                </div>
+                <p class="text-xs text-muted-foreground">{{ strandingCardData.baseline.unit }}</p>
+                
+                <!-- Risk Status -->
+                <div class="text-xs">
+                  <Badge 
+                    :variant="strandingCardData.baseline.riskLevel === 'low' ? 'default' : 
+                             strandingCardData.baseline.riskLevel === 'medium' ? 'secondary' : 'destructive'"
+                    class="text-xs"
+                  >
+                    {{ strandingCardData.baseline.status }}
+                  </Badge>
+                </div>
+                
+                <!-- Scenario Improvements -->
+                <div v-if="strandingCardData.scenarios.length > 0" class="space-y-1">
+                  <div v-for="scenario in strandingCardData.scenarios" :key="scenario.name" 
+                       class="flex justify-between text-xs">
+                    <span class="truncate">{{ scenario.name }}:</span>
+                    <span :class="getImprovementColorClass(scenario.improvement)">
+                      {{ scenario.improvement > 0 ? '+' : '' }}{{ formatNumber(scenario.improvement, 1) }}J
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="text-2xl font-bold">
                 <Skeleton class="h-6 w-16" />
               </div>
-              <p class="text-xs text-muted-foreground mt-1">Risiko-Index</p>
             </CardContent>
           </Card>
           
           <!-- Betriebskosten Card -->
-          <Card class="h-32">
+          <Card class="min-h-32">
             <CardHeader class="pb-2">
               <div class="flex items-center justify-between">
                 <CardTitle class="text-sm font-medium text-foreground">Betriebskosten</CardTitle>
-                <Euro class="h-4 w-4 text-muted-foreground" />
+                <HoverCard>
+                  <HoverCardTrigger>
+                    <Euro class="h-4 w-4 text-muted-foreground cursor-help" />
+                  </HoverCardTrigger>
+                  <HoverCardContent side="top" class="w-80">
+                    <div class="space-y-2">
+                      <h4 class="font-medium">Kosten Optionen</h4>
+                      
+                      <!-- Cost Type Selection -->
+                      <div class="space-y-2">
+                        <Label class="text-xs">Kostentyp</Label>
+                        <Select v-model="selectedCostType" v-if="costCardData?.options">
+                          <SelectTrigger class="h-8">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem
+                              v-for="type in costCardData.options.cost_types"
+                              :key="type.key"
+                              :value="type.key"
+                            >
+                              {{ type.label }}
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <!-- Unit Selection -->
+                      <div class="space-y-2">
+                        <Label class="text-xs">Einheit</Label>
+                        <Select v-model="selectedCostUnit" v-if="costCardData?.options">
+                          <SelectTrigger class="h-8">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem
+                              v-for="unit in costCardData.options.units"
+                              :key="unit.key"
+                              :value="unit.key"
+                            >
+                              {{ unit.label }}
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </HoverCardContent>
+                </HoverCard>
               </div>
             </CardHeader>
             <CardContent>
-              <div class="text-2xl font-bold">
+              <div v-if="costCardData" class="space-y-2">
+                <!-- Baseline Value -->
+                <div class="text-2xl font-bold">
+                  {{ formatNumber(costCardData.baseline.value) }}
+                </div>
+                <p class="text-xs text-muted-foreground">{{ costCardData.baseline.unit }}</p>
+                
+                <!-- Scenario Improvements -->
+                <div v-if="costCardData.scenarios.length > 0" class="space-y-1">
+                  <div v-for="scenario in costCardData.scenarios" :key="scenario.name" 
+                       class="flex justify-between text-xs">
+                    <span class="truncate">{{ scenario.name }}:</span>
+                    <span :class="getImprovementColorClass(scenario.improvement)">
+                      {{ scenario.improvement > 0 ? '+' : '' }}{{ formatNumber(scenario.improvement, 1) }}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="text-2xl font-bold">
                 <Skeleton class="h-6 w-16" />
               </div>
-              <p class="text-xs text-muted-foreground mt-1">€/m²·a</p>
             </CardContent>
           </Card>
         </div>
@@ -2182,4 +2172,4 @@ const analyzeRetrofitScenario = async () => {
 
 <style scoped>
 /* Custom styles if needed */
-</style> 
+</style>
