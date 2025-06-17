@@ -1159,7 +1159,27 @@ watch([energyCardData, emissionCardData, strandingCardData, costCardData],
 
       <!-- 3D Viewer and Building Info -->
       <div v-if="buildingData && !isSearching" class="w-full">
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Analysis Tabs -->
+        <div class="mb-6">
+          <Tabs v-model="activeAnalysisTab" class="w-full">
+            <TabsList class="grid w-full grid-cols-2 max-w-md">
+              <TabsTrigger value="energy" class="flex items-center space-x-2">
+                <Zap class="h-4 w-4" />
+                <span>Energieanalyse</span>
+              </TabsTrigger>
+              <TabsTrigger value="lifecycle" class="flex items-center space-x-2">
+                <Factory class="h-4 w-4" />
+                <span>Lebenszyklusanalyse</span>
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+        
+        <!-- Tab Content -->
+        <div class="mt-6">
+          <!-- Energy Analysis Tab Content -->
+          <div v-if="activeAnalysisTab === 'energy'">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           <!-- Building Information -->
           <div class="lg:col-span-1">
             <Card class="w-full h-[520px]">
@@ -1800,403 +1820,300 @@ watch([energyCardData, emissionCardData, strandingCardData, costCardData],
           </div>
         </div>
         
-        <!-- Analysis Tabs -->
-        <div class="mt-6">
-          <Tabs v-model="activeAnalysisTab" class="w-full">
-            <TabsList class="grid w-full grid-cols-2 max-w-md">
-              <TabsTrigger value="energy" class="flex items-center space-x-2">
-                <Zap class="h-4 w-4" />
-                <span>Energieanalyse</span>
-              </TabsTrigger>
-              <TabsTrigger value="lifecycle" class="flex items-center space-x-2">
-                <Factory class="h-4 w-4" />
-                <span>Lebenszyklusanalyse</span>
-              </TabsTrigger>
-            </TabsList>
-            
-            <!-- Energy Analysis Tab Content -->
-            <TabsContent value="energy" class="mt-6">
-              <!-- Energy Metrics Cards -->
-              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <!-- Energiebedarf Card -->
-          <Card class="min-h-32">
-            <CardHeader class="pb-2">
-              <div class="flex items-center justify-between">
-                <CardTitle class="text-sm font-medium text-foreground">Energiebedarf</CardTitle>
-                <HoverCard>
-                  <HoverCardTrigger>
-                    <Zap class="h-4 w-4 text-muted-foreground cursor-help" />
-                  </HoverCardTrigger>
-                  <HoverCardContent side="top" class="w-80">
-                    <div class="space-y-2">
-                      <h4 class="font-medium">Energiebedarf Optionen</h4>
-                      
-                      <!-- Energy Type Selection -->
-                      <div class="space-y-2">
-                        <Label class="text-xs">Energietyp</Label>
-                        <Select v-model="selectedEnergyType" v-if="energyCardData?.options">
-                          <SelectTrigger class="h-8">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem
-                              v-for="type in energyCardData.options.energy_types"
-                              :key="type.key"
-                              :value="type.key"
-                            >
-                              {{ type.label }}
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      
-                      <!-- Unit Selection -->
-                      <div class="space-y-2">
-                        <Label class="text-xs">Einheit</Label>
-                        <Select v-model="selectedEnergyUnit" v-if="energyCardData?.options">
-                          <SelectTrigger class="h-8">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem
-                              v-for="unit in energyCardData.options.units"
-                              :key="unit.key"
-                              :value="unit.key"
-                            >
-                              {{ unit.label }}
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  </HoverCardContent>
-                </HoverCard>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div v-if="energyCardData" class="space-y-2">
-                <!-- Baseline Value -->
-                <div class="text-2xl font-bold">
-                  {{ formatNumber(energyCardData.baseline.value) }}
-                </div>
-                <p class="text-xs text-muted-foreground">{{ energyCardData.baseline.unit }}</p>
-                
-                <!-- Scenario Improvements -->
-                <div v-if="energyCardData.scenarios.length > 0" class="space-y-1">
-                  <div v-for="scenario in energyCardData.scenarios" :key="scenario.name" 
-                       class="flex justify-between text-xs">
-                    <span class="truncate">{{ scenario.name }}:</span>
-                    <span :class="getImprovementColorClass(scenario.improvement)">
-                      {{ scenario.improvement > 0 ? '+' : '' }}{{ formatNumber(scenario.improvement, 1) }}%
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <div v-else class="text-2xl font-bold">
-                <Skeleton class="h-6 w-16" />
-              </div>
-            </CardContent>
-          </Card>
-          
-          <!-- Emissionen Card -->
-          <Card class="min-h-32">
-            <CardHeader class="pb-2">
-              <div class="flex items-center justify-between">
-                <CardTitle class="text-sm font-medium text-foreground">CO₂-Emissionen</CardTitle>
-                <HoverCard>
-                  <HoverCardTrigger>
-                    <Factory class="h-4 w-4 text-muted-foreground cursor-help" />
-                  </HoverCardTrigger>
-                  <HoverCardContent side="top" class="w-80">
-                    <div class="space-y-2">
-                      <h4 class="font-medium">Emissions Optionen</h4>
-                      
-                      <!-- Emission Type Selection -->
-                      <div class="space-y-2">
-                        <Label class="text-xs">Emissionstyp</Label>
-                        <Select v-model="selectedEmissionType" v-if="emissionCardData?.options">
-                          <SelectTrigger class="h-8">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem
-                              v-for="type in emissionCardData.options.emission_types"
-                              :key="type.key"
-                              :value="type.key"
-                            >
-                              {{ type.label }}
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      
-                      <!-- Unit Selection -->
-                      <div class="space-y-2">
-                        <Label class="text-xs">Einheit</Label>
-                        <Select v-model="selectedEmissionUnit" v-if="emissionCardData?.options">
-                          <SelectTrigger class="h-8">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem
-                              v-for="unit in emissionCardData.options.units"
-                              :key="unit.key"
-                              :value="unit.key"
-                            >
-                              {{ unit.label }}
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  </HoverCardContent>
-                </HoverCard>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div v-if="emissionCardData" class="space-y-2">
-                <!-- Baseline Value -->
-                <div class="text-2xl font-bold">
-                  {{ formatNumber(emissionCardData.baseline.value, 3) }}
-                </div>
-                <p class="text-xs text-muted-foreground">{{ emissionCardData.baseline.unit }}</p>
-                
-                <!-- Scenario Improvements -->
-                <div v-if="emissionCardData.scenarios.length > 0" class="space-y-1">
-                  <div v-for="scenario in emissionCardData.scenarios" :key="scenario.name" 
-                       class="flex justify-between text-xs">
-                    <span class="truncate">{{ scenario.name }}:</span>
-                    <span :class="getImprovementColorClass(scenario.improvement)">
-                      {{ scenario.improvement > 0 ? '+' : '' }}{{ formatNumber(scenario.improvement, 1) }}%
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <div v-else class="text-2xl font-bold">
-                <Skeleton class="h-6 w-16" />
-              </div>
-            </CardContent>
-          </Card>
-          
-          <!-- Stranding Card -->
-          <Card class="min-h-32">
-            <CardHeader class="pb-2">
-              <div class="flex items-center justify-between">
-                <CardTitle class="text-sm font-medium text-foreground">Stranding Risiko</CardTitle>
-                <AlertTriangle class="h-4 w-4 text-muted-foreground" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div v-if="strandingCardData" class="space-y-2">
-                <!-- Baseline Value -->
-                <div class="text-2xl font-bold" :class="getRiskColorClass(strandingCardData.baseline.riskLevel)">
-                  {{ formatNumber(strandingCardData.baseline.value, 1) }}
-                </div>
-                <p class="text-xs text-muted-foreground">{{ strandingCardData.baseline.unit }}</p>
-                
-                <!-- Risk Status -->
-                <div class="text-xs">
-                  <Badge 
-                    :variant="strandingCardData.baseline.riskLevel === 'low' ? 'default' : 
-                             strandingCardData.baseline.riskLevel === 'medium' ? 'secondary' : 'destructive'"
-                    class="text-xs"
-                  >
-                    {{ strandingCardData.baseline.status }}
-                  </Badge>
-                </div>
-                
-                <!-- Scenario Improvements -->
-                <div v-if="strandingCardData.scenarios.length > 0" class="space-y-1">
-                  <div v-for="scenario in strandingCardData.scenarios" :key="scenario.name" 
-                       class="flex justify-between text-xs">
-                    <span class="truncate">{{ scenario.name }}:</span>
-                    <span :class="getImprovementColorClass(scenario.improvement)">
-                      {{ scenario.improvement > 0 ? '+' : '' }}{{ formatNumber(scenario.improvement, 1) }}J
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <div v-else class="text-2xl font-bold">
-                <Skeleton class="h-6 w-16" />
-              </div>
-            </CardContent>
-          </Card>
-          
-          <!-- Betriebskosten Card -->
-          <Card class="min-h-32">
-            <CardHeader class="pb-2">
-              <div class="flex items-center justify-between">
-                <CardTitle class="text-sm font-medium text-foreground">Betriebskosten</CardTitle>
-                <HoverCard>
-                  <HoverCardTrigger>
-                    <Euro class="h-4 w-4 text-muted-foreground cursor-help" />
-                  </HoverCardTrigger>
-                  <HoverCardContent side="top" class="w-80">
-                    <div class="space-y-2">
-                      <h4 class="font-medium">Kosten Optionen</h4>
-                      
-                      <!-- Cost Type Selection -->
-                      <div class="space-y-2">
-                        <Label class="text-xs">Kostentyp</Label>
-                        <Select v-model="selectedCostType" v-if="costCardData?.options">
-                          <SelectTrigger class="h-8">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem
-                              v-for="type in costCardData.options.cost_types"
-                              :key="type.key"
-                              :value="type.key"
-                            >
-                              {{ type.label }}
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      
-                      <!-- Unit Selection -->
-                      <div class="space-y-2">
-                        <Label class="text-xs">Einheit</Label>
-                        <Select v-model="selectedCostUnit" v-if="costCardData?.options">
-                          <SelectTrigger class="h-8">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem
-                              v-for="unit in costCardData.options.units"
-                              :key="unit.key"
-                              :value="unit.key"
-                            >
-                              {{ unit.label }}
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  </HoverCardContent>
-                </HoverCard>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div v-if="costCardData" class="space-y-2">
-                <!-- Baseline Value -->
-                <div class="text-2xl font-bold">
-                  {{ formatNumber(costCardData.baseline.value) }}
-                </div>
-                <p class="text-xs text-muted-foreground">{{ costCardData.baseline.unit }}</p>
-                
-                <!-- Scenario Improvements -->
-                <div v-if="costCardData.scenarios.length > 0" class="space-y-1">
-                  <div v-for="scenario in costCardData.scenarios" :key="scenario.name" 
-                       class="flex justify-between text-xs">
-                    <span class="truncate">{{ scenario.name }}:</span>
-                    <span :class="getImprovementColorClass(scenario.improvement)">
-                      {{ scenario.improvement > 0 ? '+' : '' }}{{ formatNumber(scenario.improvement, 1) }}%
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <div v-else class="text-2xl font-bold">
-                <Skeleton class="h-6 w-16" />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-        
-        <!-- Construction Details Button -->
-        <div class="flex justify-center mt-6">
-          <Sheet :open="isConstructionDetailsOpen" @update:open="isConstructionDetailsOpen = $event">
-            <SheetTrigger as-child>
-              <Button variant="outline" class="flex items-center space-x-2">
-                <Settings class="h-4 w-4" />
-                <span>Konstruktionsdetails anzeigen</span>
-              </Button>
-            </SheetTrigger>
-            
-            <SheetContent side="right" class="!w-[480px] sm:!w-[650px] !max-w-none flex flex-col">
-              <SheetHeader>
-                <SheetTitle>Konstruktionsdetails</SheetTitle>
-                <SheetDescription>
-                  Detaillierte Auswahl der Konstruktionsmaßnahmen für die Gebäudesanierung.
-                </SheetDescription>
-              </SheetHeader>
-              
-              <!-- Scrollable Content Area -->
-              <div class="flex-1 overflow-y-auto py-4">
-                <div class="space-y-6 px-4">
-                  <!-- Form Data Error -->
-                  <div v-if="formDataError" class="bg-red-50 border border-red-200 rounded-md p-3">
-                    <p class="text-sm text-red-600">{{ formDataError }}</p>
-                  </div>
-                  
-                  <!-- Loading state -->
-                  <div v-if="isLoadingFormData" class="space-y-4">
-                    <Skeleton class="h-4 w-full" />
-                    <Skeleton class="h-10 w-full" />
-                    <Skeleton class="h-4 w-full" />
-                    <Skeleton class="h-10 w-full" />
-                  </div>
-                  
-                  <!-- Construction details content -->
-                  <div v-else-if="formData" class="space-y-6">
-                    <div class="space-y-4">
-                      <div>
-                        <h3 class="text-lg font-medium">
-                          Konstruktionsauswahl
-                        </h3>
-                        <p class="text-sm text-muted-foreground">Detaillierte Auswahl von 4 Konstruktionsmaßnahmen</p>
-                      </div>
-                      
-                      <!-- 4 Construction Type Selections -->
-                      <div class="space-y-4">
-                        <div v-for="constructionType in formData.construction_types" :key="constructionType" class="space-y-2">
-                          <Label :for="`construction-details-${constructionType}`" class="text-sm font-medium">{{ constructionType }}</Label>
-                          <Select>
-                            <SelectTrigger :id="`construction-details-${constructionType}`">
-                              <SelectValue placeholder="Wählen Sie..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem
-                                v-for="item in getConstructionOptions(constructionType)"
-                                :key="item.construction_number"
-                                :value="item.construction_number"
-                              >
-                                {{ item.construction_name }}
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
+            <!-- Energy Metrics Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <!-- Energiebedarf Card -->
+              <Card class="min-h-32">
+                <CardHeader class="pb-2">
+                  <div class="flex items-center justify-between">
+                    <CardTitle class="text-sm font-medium text-foreground">Energiebedarf</CardTitle>
+                    <HoverCard>
+                      <HoverCardTrigger>
+                        <Zap class="h-4 w-4 text-muted-foreground cursor-help" />
+                      </HoverCardTrigger>
+                      <HoverCardContent side="top" class="w-80">
+                        <div class="space-y-2">
+                          <h4 class="font-medium">Energiebedarf Optionen</h4>
+                          
+                          <!-- Energy Type Selection -->
+                          <div class="space-y-2">
+                            <Label class="text-xs">Energietyp</Label>
+                            <Select v-model="selectedEnergyType" v-if="energyCardData?.options">
+                              <SelectTrigger class="h-8">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem
+                                  v-for="type in energyCardData.options.energy_types"
+                                  :key="type.key"
+                                  :value="type.key"
+                                >
+                                  {{ type.label }}
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          
+                          <!-- Unit Selection -->
+                          <div class="space-y-2">
+                            <Label class="text-xs">Einheit</Label>
+                            <Select v-model="selectedEnergyUnit" v-if="energyCardData?.options">
+                              <SelectTrigger class="h-8">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem
+                                  v-for="unit in energyCardData.options.units"
+                                  :key="unit.key"
+                                  :value="unit.key"
+                                >
+                                  {{ unit.label }}
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
                         </div>
+                      </HoverCardContent>
+                    </HoverCard>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div v-if="energyCardData" class="space-y-2">
+                    <!-- Baseline Value -->
+                    <div class="text-2xl font-bold">
+                      {{ formatNumber(energyCardData.baseline.value) }}
+                    </div>
+                    <p class="text-xs text-muted-foreground">{{ energyCardData.baseline.unit }}</p>
+                    
+                    <!-- Scenario Improvements -->
+                    <div v-if="energyCardData.scenarios.length > 0" class="space-y-1">
+                      <div v-for="scenario in energyCardData.scenarios" :key="scenario.name" 
+                           class="flex justify-between text-xs">
+                        <span class="truncate">{{ scenario.name }}:</span>
+                        <span :class="getImprovementColorClass(scenario.improvement)">
+                          {{ scenario.improvement > 0 ? '+' : '' }}{{ formatNumber(scenario.improvement, 1) }}%
+                        </span>
                       </div>
                     </div>
                   </div>
-                </div>
-              </div>
+                  <div v-else class="text-2xl font-bold">
+                    <Skeleton class="h-6 w-16" />
+                  </div>
+                </CardContent>
+              </Card>
               
-              <SheetFooter class="mt-4 border-t pt-4 px-4">
-                <Button 
-                  variant="outline" 
-                  @click="isConstructionDetailsOpen = false"
-                  class="w-full"
-                >
-                  Schließen
-                </Button>
-              </SheetFooter>
-            </SheetContent>
-          </Sheet>
-        </div>
-            </TabsContent>
-            
-            <!-- Lifecycle Analysis Tab Content -->
-            <TabsContent value="lifecycle" class="mt-6">
-              <LifecycleAnalysis 
-                v-if="retrofitAnalysisResult?.lca_lcc_results"
-                :lca-lcc-data="retrofitAnalysisResult.lca_lcc_results"
-              />
-              <div v-else class="text-center py-8 text-muted-foreground">
-                <p>Keine Lebenszyklusanalysedaten verfügbar</p>
-              </div>
-            </TabsContent>
-          </Tabs>
+              <!-- Emissionen Card -->
+              <Card class="min-h-32">
+                <CardHeader class="pb-2">
+                  <div class="flex items-center justify-between">
+                    <CardTitle class="text-sm font-medium text-foreground">CO₂-Emissionen</CardTitle>
+                    <HoverCard>
+                      <HoverCardTrigger>
+                        <Factory class="h-4 w-4 text-muted-foreground cursor-help" />
+                      </HoverCardTrigger>
+                      <HoverCardContent side="top" class="w-80">
+                        <div class="space-y-2">
+                          <h4 class="font-medium">Emissions Optionen</h4>
+                          
+                          <!-- Emission Type Selection -->
+                          <div class="space-y-2">
+                            <Label class="text-xs">Emissionstyp</Label>
+                            <Select v-model="selectedEmissionType" v-if="emissionCardData?.options">
+                              <SelectTrigger class="h-8">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem
+                                  v-for="type in emissionCardData.options.emission_types"
+                                  :key="type.key"
+                                  :value="type.key"
+                                >
+                                  {{ type.label }}
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          
+                          <!-- Unit Selection -->
+                          <div class="space-y-2">
+                            <Label class="text-xs">Einheit</Label>
+                            <Select v-model="selectedEmissionUnit" v-if="emissionCardData?.options">
+                              <SelectTrigger class="h-8">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem
+                                  v-for="unit in emissionCardData.options.units"
+                                  :key="unit.key"
+                                  :value="unit.key"
+                                >
+                                  {{ unit.label }}
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </HoverCardContent>
+                    </HoverCard>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div v-if="emissionCardData" class="space-y-2">
+                    <!-- Baseline Value -->
+                    <div class="text-2xl font-bold">
+                      {{ formatNumber(emissionCardData.baseline.value, 3) }}
+                    </div>
+                    <p class="text-xs text-muted-foreground">{{ emissionCardData.baseline.unit }}</p>
+                    
+                    <!-- Scenario Improvements -->
+                    <div v-if="emissionCardData.scenarios.length > 0" class="space-y-1">
+                      <div v-for="scenario in emissionCardData.scenarios" :key="scenario.name" 
+                           class="flex justify-between text-xs">
+                        <span class="truncate">{{ scenario.name }}:</span>
+                        <span :class="getImprovementColorClass(scenario.improvement)">
+                          {{ scenario.improvement > 0 ? '+' : '' }}{{ formatNumber(scenario.improvement, 1) }}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-else class="text-2xl font-bold">
+                    <Skeleton class="h-6 w-16" />
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <!-- Stranding Card -->
+              <Card class="min-h-32">
+                <CardHeader class="pb-2">
+                  <div class="flex items-center justify-between">
+                    <CardTitle class="text-sm font-medium text-foreground">Stranding Risiko</CardTitle>
+                    <AlertTriangle class="h-4 w-4 text-muted-foreground" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div v-if="strandingCardData" class="space-y-2">
+                    <!-- Baseline Value -->
+                    <div class="text-2xl font-bold" :class="getRiskColorClass(strandingCardData.baseline.riskLevel)">
+                      {{ formatNumber(strandingCardData.baseline.value, 1) }}
+                    </div>
+                    <p class="text-xs text-muted-foreground">{{ strandingCardData.baseline.unit }}</p>
+                    
+                    <!-- Risk Status -->
+                    <div class="text-xs">
+                      <Badge 
+                        :variant="strandingCardData.baseline.riskLevel === 'low' ? 'default' : 
+                                 strandingCardData.baseline.riskLevel === 'medium' ? 'secondary' : 'destructive'"
+                        class="text-xs"
+                      >
+                        {{ strandingCardData.baseline.status }}
+                      </Badge>
+                    </div>
+                    
+                    <!-- Scenario Improvements -->
+                    <div v-if="strandingCardData.scenarios.length > 0" class="space-y-1">
+                      <div v-for="scenario in strandingCardData.scenarios" :key="scenario.name" 
+                           class="flex justify-between text-xs">
+                        <span class="truncate">{{ scenario.name }}:</span>
+                        <span :class="getImprovementColorClass(scenario.improvement)">
+                          {{ scenario.improvement > 0 ? '+' : '' }}{{ formatNumber(scenario.improvement, 1) }}J
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-else class="text-2xl font-bold">
+                    <Skeleton class="h-6 w-16" />
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <!-- Betriebskosten Card -->
+              <Card class="min-h-32">
+                <CardHeader class="pb-2">
+                  <div class="flex items-center justify-between">
+                    <CardTitle class="text-sm font-medium text-foreground">Betriebskosten</CardTitle>
+                    <HoverCard>
+                      <HoverCardTrigger>
+                        <Euro class="h-4 w-4 text-muted-foreground cursor-help" />
+                      </HoverCardTrigger>
+                      <HoverCardContent side="top" class="w-80">
+                        <div class="space-y-2">
+                          <h4 class="font-medium">Kosten Optionen</h4>
+                          
+                          <!-- Cost Type Selection -->
+                          <div class="space-y-2">
+                            <Label class="text-xs">Kostentyp</Label>
+                            <Select v-model="selectedCostType" v-if="costCardData?.options">
+                              <SelectTrigger class="h-8">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem
+                                  v-for="type in costCardData.options.cost_types"
+                                  :key="type.key"
+                                  :value="type.key"
+                                >
+                                  {{ type.label }}
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          
+                          <!-- Unit Selection -->
+                          <div class="space-y-2">
+                            <Label class="text-xs">Einheit</Label>
+                            <Select v-model="selectedCostUnit" v-if="costCardData?.options">
+                              <SelectTrigger class="h-8">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem
+                                  v-for="unit in costCardData.options.units"
+                                  :key="unit.key"
+                                  :value="unit.key"
+                                >
+                                  {{ unit.label }}
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </HoverCardContent>
+                    </HoverCard>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div v-if="costCardData" class="space-y-2">
+                    <!-- Baseline Value -->
+                    <div class="text-2xl font-bold">
+                      {{ formatNumber(costCardData.baseline.value) }}
+                    </div>
+                    <p class="text-xs text-muted-foreground">{{ costCardData.baseline.unit }}</p>
+                    
+                    <!-- Scenario Improvements -->
+                    <div v-if="costCardData.scenarios.length > 0" class="space-y-1">
+                      <div v-for="scenario in costCardData.scenarios" :key="scenario.name" 
+                           class="flex justify-between text-xs">
+                        <span class="truncate">{{ scenario.name }}:</span>
+                        <span :class="getImprovementColorClass(scenario.improvement)">
+                          {{ scenario.improvement > 0 ? '+' : '' }}{{ formatNumber(scenario.improvement, 1) }}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-else class="text-2xl font-bold">
+                    <Skeleton class="h-6 w-16" />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+          
+          <!-- Lifecycle Analysis Tab Content -->
+          <div v-else-if="activeAnalysisTab === 'lifecycle'">
+            <LifecycleAnalysis 
+              :lca-lcc-data="retrofitAnalysisResult?.lca_lcc_results || {}"
+            />
+          </div>
         </div>
       </div>
     </main>
