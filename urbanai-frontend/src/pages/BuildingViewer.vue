@@ -15,9 +15,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { Badge } from '@/components/ui/badge'
 import ArcGISSceneViewer from '@/components/map/ArcGISSceneViewer.vue'
+import LifecycleAnalysis from '@/components/analysis/LifecycleAnalysis.vue'
 import { Plus, Settings, X, Zap, Factory, AlertTriangle, Euro } from 'lucide-vue-next'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { toast } from 'vue-sonner'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 // Router
 let route: any
@@ -68,6 +70,9 @@ const energyStandards = ref<EnergyStandardsResponse | null>(null)
 
 // Construction details state
 const isConstructionDetailsOpen = ref(false)
+
+// Analysis tab state
+const activeAnalysisTab = ref('energy') // 'energy' or 'lifecycle'
 
 // Store for undo functionality
 const deletedScenario = ref<RetrofitScenario | null>(null)
@@ -613,8 +618,6 @@ const getValidationMessage = computed(() => {
     return 'Validierungsfehler'
   }
 })
-
-// Get construction options for a specific type
 const getConstructionOptions = (constructionType: string) => {
   try {
     return formData.value?.construction_samples[constructionType] || []
@@ -1797,8 +1800,24 @@ watch([energyCardData, emissionCardData, strandingCardData, costCardData],
           </div>
         </div>
         
-        <!-- Energy Metrics Cards -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+        <!-- Analysis Tabs -->
+        <div class="mt-6">
+          <Tabs v-model="activeAnalysisTab" class="w-full">
+            <TabsList class="grid w-full grid-cols-2 max-w-md">
+              <TabsTrigger value="energy" class="flex items-center space-x-2">
+                <Zap class="h-4 w-4" />
+                <span>Energieanalyse</span>
+              </TabsTrigger>
+              <TabsTrigger value="lifecycle" class="flex items-center space-x-2">
+                <Factory class="h-4 w-4" />
+                <span>Lebenszyklusanalyse</span>
+              </TabsTrigger>
+            </TabsList>
+            
+            <!-- Energy Analysis Tab Content -->
+            <TabsContent value="energy" class="mt-6">
+              <!-- Energy Metrics Cards -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <!-- Energiebedarf Card -->
           <Card class="min-h-32">
             <CardHeader class="pb-2">
@@ -2164,6 +2183,20 @@ watch([energyCardData, emissionCardData, strandingCardData, costCardData],
               </SheetFooter>
             </SheetContent>
           </Sheet>
+        </div>
+            </TabsContent>
+            
+            <!-- Lifecycle Analysis Tab Content -->
+            <TabsContent value="lifecycle" class="mt-6">
+              <LifecycleAnalysis 
+                v-if="retrofitAnalysisResult?.lca_lcc_results"
+                :lca-lcc-data="retrofitAnalysisResult.lca_lcc_results"
+              />
+              <div v-else class="text-center py-8 text-muted-foreground">
+                <p>Keine Lebenszyklusanalysedaten verfügbar</p>
+              </div>
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
     </main>
