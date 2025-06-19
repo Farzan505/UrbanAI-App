@@ -1,0 +1,752 @@
+<script setup lang="ts">
+import { ref, computed, onMounted, watch } from 'vue'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Badge } from '@/components/ui/badge'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
+import { AlertTriangle, TrendingDown, Euro, Factory } from 'lucide-vue-next'
+import { Line, Bar } from 'vue-chartjs'
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+} from 'chart.js'
+
+// Register Chart.js components including Filler for fill option
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+)
+
+interface Props {
+  emissionData: any
+}
+
+const props = defineProps<Props>()
+
+// Toggle state for scenario vs status quo
+const useScenario = ref(false)
+
+// Sample data - remove this when using real API data
+const sampleData = ref<any>(null)
+
+// Chart options for reduction path
+const reductionPathOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    title: {
+      display: true,
+      text: 'CO₂-Reduktionspfad',
+      font: {
+        size: 16,
+        weight: 'bold' as const
+      }
+    },
+    legend: {
+      position: 'bottom' as const
+    },
+    tooltip: {
+      mode: 'index' as const,
+      intersect: false,
+      callbacks: {
+        label: function(context: any) {
+          return `${context.dataset.label}: ${context.parsed.y.toFixed(2)} kg CO₂/m²`
+        }
+      }
+    }
+  },
+  scales: {
+    x: {
+      type: 'linear' as const,
+      title: {
+        display: true,
+        text: 'Jahr'
+      },
+      ticks: {
+        callback: function(value: any) {
+          return Math.round(value).toString() // Remove comma formatting
+        }
+      }
+    },
+    y: {
+      title: {
+        display: true,
+        text: 'CO₂-Emissionen (kg CO₂/m²)'
+      },
+      beginAtZero: true
+    }
+  },
+  elements: {
+    line: {
+      tension: 0.1
+    }
+  }
+}
+
+// Chart options for scope emissions (bar chart)
+const scopeEmissionsOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    title: {
+      display: true,
+      text: 'Scope Emissionen',
+      font: {
+        size: 16,
+        weight: 'bold' as const
+      }
+    },
+    legend: {
+      position: 'bottom' as const
+    },
+    tooltip: {
+      mode: 'index' as const,
+      intersect: false
+    }
+  },
+  scales: {
+    x: {
+      type: 'linear' as const,
+      title: {
+        display: true,
+        text: 'Jahr'
+      },
+      stacked: true,
+      ticks: {
+        callback: function(value: any) {
+          return Math.round(value).toString() // Remove comma formatting
+        },
+        stepSize: 1
+      }
+    },
+    y: {
+      title: {
+        display: true,
+        text: 'Emissionen (kg CO₂)'
+      },
+      stacked: true,
+      beginAtZero: true
+    }
+  }
+}
+
+// Chart options for costs
+const costsOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    title: {
+      display: true,
+      text: 'Kosten über Zeit',
+      font: {
+        size: 16,
+        weight: 'bold' as const
+      }
+    },
+    legend: {
+      position: 'bottom' as const
+    },
+    tooltip: {
+      mode: 'index' as const,
+      intersect: false,
+      callbacks: {
+        label: function(context: any) {
+          return `${context.dataset.label}: €${context.parsed.y.toFixed(2)}`
+        }
+      }
+    }
+  },
+  scales: {
+    x: {
+      type: 'linear' as const,
+      title: {
+        display: true,
+        text: 'Jahr'
+      },
+      ticks: {
+        callback: function(value: any) {
+          return Math.round(value).toString() // Remove comma formatting
+        },
+        stepSize: 1
+      }
+    },
+    y: {
+      title: {
+        display: true,
+        text: 'Kosten (€)'
+      },
+      beginAtZero: true
+    }
+  }
+}
+
+// Load sample data - this will be removed when using real API data
+onMounted(async () => {
+  try {
+    // Load sample data for testing if no props data is available
+    if (!props.emissionData) {
+      const response = await fetch('/sample-retrofit-analysis-response.json')
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      const data = await response.json()
+      sampleData.value = data.data.emission_results
+      console.log('📊 Loaded sample emission data, scenario_activated:', sampleData.value?.scenario_activated)
+    }
+  } catch (error) {
+    console.error('Error in Dekarbonisierung component:', error)
+    sampleData.value = false // Set to false to indicate error
+  }
+})
+
+// Debug watchers - reduced logging
+watch(() => props.emissionData, (newData, oldData) => {
+  if (newData?.scenario_activated !== oldData?.scenario_activated) {
+    console.log('🔍 Props scenario_activated changed:', oldData?.scenario_activated, '→', newData?.scenario_activated)
+  }
+}, { deep: true, immediate: true })
+
+watch(useScenario, (newValue) => {
+  console.log('🔄 Switch toggled to:', newValue ? 'Scenario' : 'Status Quo')
+  console.log('🔄 Scenario activated:', scenarioActivated.value)
+})
+
+// Computed properties for data processing
+const emissionResults = computed(() => {
+  // Always prioritize sample data if available, since props might be unreliable
+  const data = sampleData.value || props.emissionData || null
+  
+  // Add some stability checking
+  if (data && typeof data === 'object') {
+    return data
+  }
+  
+  return null
+})
+
+const scenarioActivated = computed(() => {
+  const activated = emissionResults.value?.scenario_activated || false
+  return activated
+})
+
+const profileKey = computed(() => {
+  // Use the toggle state to determine which profile to show
+  return useScenario.value ? 'profile_combined' : 'profile_status_quo'
+})
+
+const currentProfileType = computed(() => {
+  return useScenario.value ? 'scenario' : 'status_quo'
+})
+
+// Additional watchers after computed properties
+watch(scenarioActivated, (newValue, oldValue) => {
+  if (newValue !== oldValue) {
+    console.log('🎯 scenarioActivated changed from', oldValue, 'to', newValue)
+  }
+})
+
+watch(emissionResults, (newData, oldData) => {
+  if (newData?.scenario_activated !== oldData?.scenario_activated) {
+    console.log('📊 emissionResults scenario_activated changed:', oldData?.scenario_activated, '→', newData?.scenario_activated)
+  }
+}, { deep: true })
+
+// Reduction path chart data
+const reductionPathData = computed(() => {
+  const results = emissionResults.value
+  if (!results?.reduction_path) {
+    console.log('❌ No reduction path data')
+    return null
+  }
+
+  const reductionYears = Object.keys(results.reduction_path).map(Number).sort()
+  const reductionValues = reductionYears.map(year => results.reduction_path[year.toString()])
+
+  const datasets: any[] = [
+    {
+      label: 'CO₂-Reduktionspfad',
+      data: reductionValues,
+      borderColor: 'rgb(59, 130, 246)',
+      backgroundColor: 'rgba(59, 130, 246, 0.1)',
+      fill: false,
+      tension: 0.1,
+      pointRadius: 4
+    }
+  ]
+
+  // Add CO2 emissions heating/DHW data - show both profiles when scenario is active
+  if (results.co2_emissions_heating_dhw) {
+    console.log('🔥 Available heating/DHW profiles:', Object.keys(results.co2_emissions_heating_dhw))
+    
+    // If switch is off or no scenario available, show only status quo
+    if (!useScenario.value || !scenarioActivated.value) {
+      if (results.co2_emissions_heating_dhw.profile_status_quo) {
+        const statusQuoProfile = results.co2_emissions_heating_dhw.profile_status_quo
+        const statusQuoYears = Object.keys(statusQuoProfile).map(Number).sort()
+        const statusQuoValues = statusQuoYears.map(year => statusQuoProfile[year.toString()])
+
+        console.log('🔥 Status quo heating/DHW:', { years: statusQuoYears, values: statusQuoValues })
+
+        datasets.push({
+          label: 'CO₂ Heizung/Warmwasser (Status Quo)',
+          data: statusQuoValues,
+          borderColor: 'rgb(239, 68, 68)',
+          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+          borderDash: [5, 5], // Dashed line for status quo
+          fill: false,
+          tension: 0.1,
+          pointRadius: 3
+        })
+      }
+    } else {
+      // Switch is on and scenario is available - show combined profile
+      if (results.co2_emissions_heating_dhw.profile_combined) {
+        const combinedProfile = results.co2_emissions_heating_dhw.profile_combined
+        const combinedYears = Object.keys(combinedProfile).map(Number).sort()
+        const combinedValues = combinedYears.map(year => combinedProfile[year.toString()])
+
+        console.log('🔥 Combined heating/DHW:', { years: combinedYears, values: combinedValues })
+
+        datasets.push({
+          label: 'CO₂ Heizung/Warmwasser (Szenario)',
+          data: combinedValues,
+          borderColor: 'rgb(16, 185, 129)',
+          backgroundColor: 'rgba(16, 185, 129, 0.1)',
+          fill: false,
+          tension: 0.1,
+          pointRadius: 3
+        })
+      }
+    }
+  }
+
+  // Add stranding points if available
+  if (results.stranding) {
+    const strandingAnnotations = []
+
+    // Check for stranding dates
+    if (results.stranding.status_quo && results.stranding.status_quo !== null) {
+      const strandingDate = new Date(results.stranding.status_quo)
+      const strandingYear = strandingDate.getFullYear()
+      if (reductionYears.includes(strandingYear)) {
+        const yearIndex = reductionYears.indexOf(strandingYear)
+        strandingAnnotations.push({
+          year: strandingYear,
+          value: reductionValues[yearIndex],
+          label: 'Stranding (Status Quo)'
+        })
+      }
+    }
+
+    if (results.stranding.scenario && results.stranding.scenario !== null) {
+      const strandingDate = new Date(results.stranding.scenario)
+      const strandingYear = strandingDate.getFullYear()
+      if (reductionYears.includes(strandingYear)) {
+        const yearIndex = reductionYears.indexOf(strandingYear)
+        strandingAnnotations.push({
+          year: strandingYear,
+          value: reductionValues[yearIndex],
+          label: 'Stranding (Szenario)'
+        })
+      }
+    }
+
+    console.log('⚠️ Stranding annotations:', strandingAnnotations)
+  }
+
+  // Combine all years for x-axis
+  const allYears = [...new Set([...reductionYears])].sort()
+
+  return {
+    labels: allYears,
+    datasets
+  }
+})
+
+// Stranding information
+const strandingInfo = computed(() => {
+  const results = emissionResults.value
+  if (!results?.stranding) return null
+
+  const profileType = currentProfileType.value
+  const strandingDate = results.stranding[profileType]
+  
+  return {
+    date: strandingDate,
+    difference: results.stranding.difference,
+    hasRisk: strandingDate !== null && strandingDate !== undefined
+  }
+})
+
+// Scope emissions chart data
+const scopeEmissionsData = computed(() => {
+  const results = emissionResults.value
+  if (!results?.scope_emissions) {
+    return null
+  }
+
+  // Determine which profile to show based on switch and availability
+  let profileToShow = 'profile_status_quo'
+  if (useScenario.value && scenarioActivated.value && results.scope_emissions.profile_combined) {
+    profileToShow = 'profile_combined'
+  }
+
+  // Use the determined profile data
+  const profileData = results.scope_emissions[profileToShow]
+  
+  if (!profileData) {
+    return null
+  }
+
+  // Get years from any scope data (they should all have the same years)
+  const scope1Data = profileData['Scope 1']?.heating || {}
+  // Extract years from date strings like "2020-01-01" and convert to numbers
+  const years = Object.keys(scope1Data)
+    .map(dateStr => parseInt(dateStr.split('-')[0]))
+    .sort((a, b) => a - b)
+
+  console.log('📊 Scope emissions:', { profileToShow, years, hasData: years.length > 0 })
+  
+  // Process each scope
+  const datasets: any[] = []
+  const colors = {
+    'Scope 1': { bg: 'rgba(239, 68, 68, 0.7)', border: 'rgb(239, 68, 68)' },
+    'Scope 2': { bg: 'rgba(59, 130, 246, 0.7)', border: 'rgb(59, 130, 246)' },
+    'Scope 3': { bg: 'rgba(16, 185, 129, 0.7)', border: 'rgb(16, 185, 129)' }
+  }
+
+  Object.keys(profileData).forEach(scopeKey => {
+    const scopeValues = profileData[scopeKey]
+    if (scopeValues && typeof scopeValues === 'object') {
+      // Combine heating, dhw, and electricity for each scope
+      const combinedValues = years.map(year => {
+        const dateKey = `${year}-01-01`
+        const heating = scopeValues.heating?.[dateKey] || 0
+        const dhw = scopeValues.dhw?.[dateKey] || 0
+        const electricity = scopeValues.electricity?.[dateKey] || 0
+        return heating + dhw + electricity
+      })
+
+      datasets.push({
+        label: `${scopeKey} (${useScenario.value ? 'Szenario' : 'Status Quo'})`,
+        data: combinedValues,
+        backgroundColor: colors[scopeKey as keyof typeof colors]?.bg || 'rgba(156, 163, 175, 0.7)',
+        borderColor: colors[scopeKey as keyof typeof colors]?.border || 'rgb(156, 163, 175)',
+        borderWidth: 1
+      })
+    }
+  })
+
+  return {
+    labels: years,
+    datasets
+  }
+})
+
+// CO2 costs chart data
+const co2CostsData = computed(() => {
+  const results = emissionResults.value
+  if (!results?.co2_costs_tax) {
+    return null
+  }
+
+  // Determine which profile to show based on switch and availability
+  let profileToShow = 'profile_status_quo'
+  if (useScenario.value && scenarioActivated.value && results.co2_costs_tax.profile_combined) {
+    profileToShow = 'profile_combined'
+  }
+
+  const profile = results.co2_costs_tax[profileToShow]
+  if (!profile) {
+    return null
+  }
+
+  // Extract years from the profile data - these might be simple year strings
+  const years = Object.keys(profile)
+    .map(key => parseInt(key))
+    .sort((a, b) => a - b)
+  
+  const values = years.map(year => profile[year.toString()])
+
+  console.log('💰 CO2 costs chart data:', { profileToShow, years, values, hasData: values.length > 0 })
+
+  return {
+    labels: years,
+    datasets: [
+      {
+        label: `CO₂-Steuerkosten (${useScenario.value ? 'Szenario' : 'Status Quo'})`,
+        data: values,
+        borderColor: 'rgb(234, 88, 12)',
+        backgroundColor: 'rgba(234, 88, 12, 0.1)',
+        fill: true,
+        tension: 0.1
+      }
+    ]
+  }
+})
+
+// Operation costs chart data
+const operationCostsData = computed(() => {
+  const results = emissionResults.value
+  if (!results?.operation_costs) {
+    return null
+  }
+
+  // Determine which profile to show based on switch and availability
+  let profileToShow = 'profile_status_quo'
+  if (useScenario.value && scenarioActivated.value && results.operation_costs.profile_combined) {
+    profileToShow = 'profile_combined'
+  }
+
+  const profile = results.operation_costs[profileToShow]
+  if (!profile) {
+    return null
+  }
+
+  // Extract years from the profile data - these are simple year strings
+  const years = Object.keys(profile)
+    .map(key => parseInt(key))
+    .sort((a, b) => a - b)
+    
+  const values = years.map(year => profile[year.toString()])
+
+  console.log('⚡ Operation costs chart data:', { profileToShow, years, values, hasData: values.length > 0 })
+
+  return {
+    labels: years,
+    datasets: [
+      {
+        label: `Betriebskosten (${useScenario.value ? 'Szenario' : 'Status Quo'})`,
+        data: values,
+        borderColor: 'rgb(16, 185, 129)',
+        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+        fill: true,
+        tension: 0.1
+      }
+    ]
+  }
+})
+
+// Format date for display
+const formatStrandingDate = (dateString: string) => {
+  if (!dateString) return 'Nicht verfügbar'
+  const date = new Date(dateString)
+  return date.toLocaleDateString('de-DE', { 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  })
+}
+</script>
+
+<template>
+  <div class="space-y-6">
+    <!-- Header with Toggle -->
+    <div class="flex items-center justify-between">
+      <div class="flex items-center space-x-2">
+        <TrendingDown class="h-6 w-6 text-green-600" />
+        <h2 class="text-2xl font-semibold">Dekarbonisierung</h2>
+        <Badge v-if="scenarioActivated" variant="default">Szenario verfügbar</Badge>
+        <Badge v-else variant="secondary">Nur Status Quo</Badge>
+      </div>
+      
+      <!-- Toggle Switch -->
+      <div v-if="scenarioActivated" class="flex items-center space-x-3">
+        <Label for="scenario-toggle" class="text-sm font-medium">
+          {{ useScenario ? 'Szenario' : 'Status Quo' }}
+        </Label>
+        <Switch 
+          id="scenario-toggle"
+          v-model:checked="useScenario"
+          :disabled="!scenarioActivated"
+        />
+      </div>
+    </div>
+
+    <!-- Loading State -->
+    <div v-if="!emissionResults" class="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Laden...</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Skeleton class="h-64 w-full" />
+          <p class="text-sm text-muted-foreground mt-2">
+            Lade Emissionsdaten...
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+
+    <!-- Error State -->
+    <div v-else-if="emissionResults === false" class="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Fehler beim Laden</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p class="text-sm text-muted-foreground">
+            Die Emissionsdaten konnten nicht geladen werden.
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+
+    <!-- Debug Information - Enabled for troubleshooting -->
+    <div v-if="emissionResults" class="text-xs text-muted-foreground p-2 bg-gray-50 rounded">
+      <p>Debug: Emission data available: {{ !!emissionResults }}</p>
+      <p>Scenario activated: {{ scenarioActivated }}</p>
+      <p>Current profile: {{ profileKey }}</p>
+      <p>Has reduction path: {{ !!emissionResults?.reduction_path }}</p>
+      <p>Has scope emissions: {{ !!emissionResults?.scope_emissions }}</p>
+      <p>Has CO2 costs: {{ !!emissionResults?.co2_costs_tax }}</p>
+      <p>Has operation costs: {{ !!emissionResults?.operation_costs }}</p>
+    </div>
+
+    <!-- Main Content -->
+    <div v-if="emissionResults" class="space-y-6">
+      <!-- Reduction Path Chart -->
+      <Card>
+        <CardHeader>
+          <CardTitle class="flex items-center space-x-2">
+            <TrendingDown class="h-5 w-5 text-green-600" />
+            <span>CO₂-Reduktionspfad</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div v-if="reductionPathData" class="h-80">
+            <Line 
+              :data="reductionPathData" 
+              :options="reductionPathOptions"
+            />
+          </div>
+          <div v-else class="h-80 flex items-center justify-center text-muted-foreground">
+            Keine Reduktionspfad-Daten verfügbar
+          </div>
+        </CardContent>
+      </Card>
+
+      <!-- Stranding Information -->
+      <Card>
+        <CardHeader>
+          <CardTitle class="flex items-center space-x-2">
+            <AlertTriangle class="h-5 w-5 text-orange-600" />
+            <span>Stranding Risiko</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div v-if="strandingInfo" class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="space-y-2">
+                <h4 class="font-medium">Stranding Datum</h4>
+                <div v-if="strandingInfo.hasRisk" class="space-y-1">
+                  <p class="text-lg font-semibold text-orange-600">
+                    {{ formatStrandingDate(strandingInfo.date) }}
+                  </p>
+                  <Badge variant="destructive">Risiko vorhanden</Badge>
+                </div>
+                <div v-else class="space-y-1">
+                  <p class="text-lg font-semibold text-green-600">
+                    Kein Stranding
+                  </p>
+                  <Badge variant="default">Sicher</Badge>
+                </div>
+              </div>
+              <div class="space-y-2">
+                <h4 class="font-medium">Status</h4>
+                <p class="text-sm text-muted-foreground">
+                  {{ strandingInfo.difference }}
+                </p>
+              </div>
+            </div>
+          </div>
+          <div v-else class="text-muted-foreground">
+            Keine Stranding-Daten verfügbar
+          </div>
+        </CardContent>
+      </Card>
+
+      <!-- Scope Emissions Chart -->
+      <Card>
+        <CardHeader>
+          <CardTitle class="flex items-center space-x-2">
+            <Factory class="h-5 w-5 text-blue-600" />
+            <span>Scope Emissionen</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div v-if="scopeEmissionsData" class="h-80">
+            <Bar 
+              :data="scopeEmissionsData" 
+              :options="scopeEmissionsOptions"
+            />
+          </div>
+          <div v-else class="h-80 flex items-center justify-center text-muted-foreground">
+            Keine Scope-Emissions-Daten verfügbar
+          </div>
+        </CardContent>
+      </Card>
+
+      <!-- Costs Charts -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- CO2 Costs -->
+        <Card>
+          <CardHeader>
+            <CardTitle class="flex items-center space-x-2">
+              <Euro class="h-5 w-5 text-orange-600" />
+              <span>CO₂-Steuerkosten</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div v-if="co2CostsData" class="h-64">
+              <Line 
+                :data="co2CostsData" 
+                :options="costsOptions"
+              />
+            </div>
+            <div v-else class="h-64 flex items-center justify-center text-muted-foreground">
+              Keine CO₂-Kostendaten verfügbar
+            </div>
+          </CardContent>
+        </Card>
+
+        <!-- Operation Costs -->
+        <Card>
+          <CardHeader>
+            <CardTitle class="flex items-center space-x-2">
+              <Euro class="h-5 w-5 text-green-600" />
+              <span>Betriebskosten</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div v-if="operationCostsData" class="h-64">
+              <Line 
+                :data="operationCostsData" 
+                :options="costsOptions"
+              />
+            </div>
+            <div v-else class="h-64 flex items-center justify-center text-muted-foreground">
+              Keine Betriebskostendaten verfügbar
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  </div>
+</template>

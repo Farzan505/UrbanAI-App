@@ -16,11 +16,12 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/h
 import { Badge } from '@/components/ui/badge'
 import ArcGISSceneViewer from '@/components/map/ArcGISSceneViewer.vue'
 import LifecycleAnalysis from '@/components/analysis/LifecycleAnalysis.vue'
-import { Plus, Settings, X, Zap, Factory, AlertTriangle, Euro, CircleFadingPlus, ChartNoAxesGantt } from 'lucide-vue-next'
+import Dekarbonisierung from '@/components/analysis/Dekarbonisierung.vue'
+import { Plus, Settings, X, Zap, Factory, AlertTriangle, Euro, CircleFadingPlus, ChartNoAxesGantt, TrendingDown } from 'lucide-vue-next'
 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { toast } from 'vue-sonner'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 // Router
 let route: any
@@ -73,7 +74,7 @@ const energyStandards = ref<EnergyStandardsResponse | null>(null)
 const isConstructionDetailsOpen = ref(false)
 
 // Analysis tab state
-const activeAnalysisTab = ref('energy') // 'energy' or 'lifecycle'
+const activeAnalysisTab = ref('energy') // 'energy', 'lifecycle', or 'dekarbonisierung'
 
 // Store for undo functionality
 const deletedScenario = ref<RetrofitScenario | null>(null)
@@ -1163,7 +1164,7 @@ watch([energyCardData, emissionCardData, strandingCardData, costCardData],
         <!-- Analysis Tabs -->
         <div class="mb-6">
           <Tabs v-model="activeAnalysisTab" class="w-full">
-            <TabsList class="grid w-full grid-cols-2 max-w-md">
+            <TabsList class="grid w-full grid-cols-3 max-w-lg">
               <TabsTrigger value="energy" class="flex items-center space-x-2">
                 <ChartNoAxesGantt class="h-4 w-4" />
                 <span>Überblick</span>
@@ -1171,6 +1172,10 @@ watch([energyCardData, emissionCardData, strandingCardData, costCardData],
               <TabsTrigger value="lifecycle" class="flex items-center space-x-2">
                 <CircleFadingPlus class="h-4 w-4" />
                 <span>Lebenszyklusanalyse</span>
+              </TabsTrigger>
+              <TabsTrigger value="dekarbonisierung" class="flex items-center space-x-2">
+                <TrendingDown class="h-4 w-4" />
+                <span>Dekarbonisierung</span>
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -2113,6 +2118,13 @@ watch([energyCardData, emissionCardData, strandingCardData, costCardData],
           <div v-else-if="activeAnalysisTab === 'lifecycle'">
             <LifecycleAnalysis 
               :lca-lcc-data="retrofitAnalysisResult?.lca_lcc_results || {}"
+            />
+          </div>
+          
+          <!-- Dekarbonisierung Tab Content -->
+          <div v-else-if="activeAnalysisTab === 'dekarbonisierung'">
+            <Dekarbonisierung 
+              :emission-data="retrofitAnalysisResult?.data?.emission_results || null"
             />
           </div>
         </div>
