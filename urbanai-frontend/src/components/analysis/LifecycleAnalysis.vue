@@ -626,7 +626,7 @@ const exportData = () => {
         <div class="mt-4 flex items-center space-x-2">
           <Switch 
             id="per-m2-toggle"
-            v-model:checked="showPerM2"
+            v-model="showPerM2"
           />
           <Label for="per-m2-toggle" class="text-sm">
             Pro m² anzeigen

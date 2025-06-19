@@ -573,7 +573,7 @@ const formatStrandingDate = (dateString: string) => {
         </Label>
         <Switch 
           id="scenario-toggle"
-          v-model:checked="useScenario"
+          v-model="useScenario"
           :disabled="!scenarioActivated"
         />
       </div>
