@@ -16,7 +16,8 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/h
 import { Badge } from '@/components/ui/badge'
 import ArcGISSceneViewer from '@/components/map/ArcGISSceneViewer.vue'
 import LifecycleAnalysis from '@/components/analysis/LifecycleAnalysis.vue'
-import { Plus, Settings, X, Zap, Factory, AlertTriangle, Euro } from 'lucide-vue-next'
+import { Plus, Settings, X, Zap, Factory, AlertTriangle, Euro, CircleFadingPlus, ChartNoAxesGantt } from 'lucide-vue-next'
+
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { toast } from 'vue-sonner'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -1164,11 +1165,11 @@ watch([energyCardData, emissionCardData, strandingCardData, costCardData],
           <Tabs v-model="activeAnalysisTab" class="w-full">
             <TabsList class="grid w-full grid-cols-2 max-w-md">
               <TabsTrigger value="energy" class="flex items-center space-x-2">
-                <Zap class="h-4 w-4" />
-                <span>Energieanalyse</span>
+                <ChartNoAxesGantt class="h-4 w-4" />
+                <span>Überblick</span>
               </TabsTrigger>
               <TabsTrigger value="lifecycle" class="flex items-center space-x-2">
-                <Factory class="h-4 w-4" />
+                <CircleFadingPlus class="h-4 w-4" />
                 <span>Lebenszyklusanalyse</span>
               </TabsTrigger>
             </TabsList>

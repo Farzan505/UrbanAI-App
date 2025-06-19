@@ -127,28 +127,42 @@ const buildingLevelData = computed(() => {
     const data = results[component]
     
     // Extract costs from summary
-    const cost = data.summary?.total_cost_euro || 0
+    const totalCostValue = data.summary?.total_cost_euro || 0
+    const costPerM2Value = data.summary?.cost_per_m2_euro || 0
     const area = data.summary?.area_m2 || 0
-    totalCost += cost
+    totalCost += totalCostValue
     totalArea += area
 
-    // Extract LCA data from summary or calculate from raw data
-    const finalImpacts = data.summary?.final_impacts || {}
-    const gwp = finalImpacts.gwptotal_a2 || 0
-    const pert = finalImpacts.pert || 0
-    const penrt = finalImpacts.penrt || 0
+    // Calculate LCA values from lca_by_material data
+    const lcaData = data.lca_by_material || []
+    let gwpTotal = 0, gwpPerM2 = 0
+    let pertTotal = 0, pertPerM2 = 0
+    let penrtTotal = 0, penrtPerM2 = 0
 
-    totalGWP += gwp
-    totalPERT += pert
-    totalPENRT += penrt
+    lcaData.forEach((item: any) => {
+      if (item.indicator === 'gwptotal_a2') {
+        gwpTotal += item.scaled_value || 0
+        gwpPerM2 += item.raw_value || 0
+      } else if (item.indicator === 'pert') {
+        pertTotal += item.scaled_value || 0
+        pertPerM2 += item.raw_value || 0
+      } else if (item.indicator === 'penrt') {
+        penrtTotal += item.scaled_value || 0
+        penrtPerM2 += item.raw_value || 0
+      }
+    })
+
+    totalGWP += gwpTotal
+    totalPERT += pertTotal
+    totalPENRT += penrtTotal
 
     return {
       name: getComponentLabel(component),
       component,
-      cost: showPerM2.value && area > 0 ? cost / area : cost,
-      gwp: showPerM2.value && area > 0 ? gwp / area : gwp,
-      pert: showPerM2.value && area > 0 ? pert / area : pert,
-      penrt: showPerM2.value && area > 0 ? penrt / area : penrt,
+      cost: showPerM2.value ? costPerM2Value : totalCostValue,
+      gwp: showPerM2.value ? gwpPerM2 : gwpTotal,
+      pert: showPerM2.value ? pertPerM2 : pertTotal,
+      penrt: showPerM2.value ? penrtPerM2 : penrtTotal,
       area: area,
       uValueOld: data.summary?.u_value_old || 0,
       uValueNew: data.summary?.u_value_new || 0
@@ -186,10 +200,15 @@ const componentLevelData = computed(() => {
         materials: []
       }
     }
-    acc[year].totalCost += item.total_cost || 0
+    const totalCost = item.total_cost || 0
+    const costPerM2 = item.cost_per_m2 || 0
+    
+    acc[year].totalCost += totalCost
     acc[year].materials.push({
       name: item.name_de,
-      cost: item.total_cost || 0,
+      cost: totalCost,
+      total_cost: totalCost,
+      cost_per_m2: costPerM2,
       eventType: item.event_type,
       cause: item.cause
     })
@@ -210,6 +229,8 @@ const componentLevelData = computed(() => {
     acc[indicator].materials.push({
       name: item.name_de,
       value: item.total_value || 0,
+      raw_value: item.raw_value || 0,
+      scaled_value: item.scaled_value || 0,
       module: item.module,
       replacementYear: item.replacement_year
     })
@@ -290,8 +311,8 @@ const yearBasedLccChartData = computed(() => {
     data: lccData.map((yearData: any) => {
       const material = yearData.materials.find((m: any) => m.name === materialName)
       if (!material) return 0
-      // Use existing per m² values from JSON
-      return showPerM2.value ? (material.cost_per_m2 || 0) : (material.total_cost || 0)
+      // Use showPerM2 toggle to determine which field to use
+      return showPerM2.value ? (material.cost_per_m2 || 0) : (material.cost || material.total_cost || 0)
     }),
     backgroundColor: materialColors[index % materialColors.length],
     borderColor: materialColors[index % materialColors.length],
@@ -301,6 +322,49 @@ const yearBasedLccChartData = computed(() => {
   return {
     labels: lccData.map((yearData: any) => yearData.year.toString()),
     datasets
+  }
+})
+
+// LCC chart options
+const lccChartOptions = computed(() => {
+  const unit = showPerM2.value ? '€/m²' : '€'
+  
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'top' as const,
+      },
+      tooltip: {
+        callbacks: {
+          label: function(context: any) {
+            return `${context.dataset.label}: ${formatCurrency(context.parsed.y)} ${showPerM2.value ? '/m²' : ''}`
+          }
+        }
+      },
+      title: {
+        display: true,
+        text: `Lebenszykluskosten nach Jahr (${unit})`
+      }
+    },
+    scales: {
+      x: {
+        title: {
+          display: true,
+          text: 'Jahr'
+        },
+        stacked: true
+      },
+      y: {
+        title: {
+          display: true,
+          text: `Kosten (${unit})`
+        },
+        stacked: true,
+        beginAtZero: true
+      }
+    }
   }
 })
 
@@ -338,7 +402,9 @@ const yearBasedLcaChartData = computed(() => {
     label: materialName as string,
     data: years.map(year => {
       const material = materialsByYear[parseInt(year)]?.find((m: any) => m.name === materialName)
-      return material ? material.value : 0
+      if (!material) return 0
+      // Use showPerM2 toggle to determine which field to use
+      return showPerM2.value ? (material.raw_value || 0) : (material.scaled_value || 0)
     }),
     backgroundColor: materialColors[index % materialColors.length],
     borderColor: materialColors[index % materialColors.length],
@@ -348,6 +414,50 @@ const yearBasedLcaChartData = computed(() => {
   return {
     labels: years,
     datasets
+  }
+})
+
+// LCA chart options
+const lcaChartOptions = computed(() => {
+  const indicatorInfo = lcaIndicators.find(i => i.key === selectedIndicator.value)
+  const unit = showPerM2.value ? `${indicatorInfo?.unit}/m²` : indicatorInfo?.unit
+
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'top' as const,
+      },
+      tooltip: {
+        callbacks: {
+          label: function(context: any) {
+            return `${context.dataset.label}: ${formatNumber(context.parsed.y)} ${unit}`
+          }
+        }
+      },
+      title: {
+        display: true,
+        text: `${indicatorInfo?.label} nach Jahr (${unit})`
+      }
+    },
+    scales: {
+      x: {
+        title: {
+          display: true,
+          text: 'Jahr'
+        },
+        stacked: true
+      },
+      y: {
+        title: {
+          display: true,
+          text: `${indicatorInfo?.label} (${unit})`
+        },
+        stacked: true,
+        beginAtZero: true
+      }
+    }
   }
 })
 
@@ -403,38 +513,6 @@ const chartOptions = computed(() => ({
   },
   scales: {
     y: {
-      beginAtZero: true
-    }
-  }
-}))
-
-// Stacked chart options for year-based charts
-const stackedChartOptions = computed(() => ({
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      position: 'top' as const,
-    },
-    tooltip: {
-      callbacks: {
-        label: function(context: any) {
-          const unit = showPerM2.value ? '/m²' : ''
-          if (activeTab.value === 'lcc') {
-            return `${context.dataset.label}: ${formatCurrency(context.parsed.y)}${unit}`
-          } else {
-            return `${context.dataset.label}: ${formatNumber(context.parsed.y)}${unit}`
-          }
-        }
-      }
-    }
-  },
-  scales: {
-    x: {
-      stacked: true,
-    },
-    y: {
-      stacked: true,
       beginAtZero: true
     }
   }
@@ -740,7 +818,7 @@ const exportData = () => {
             <Bar 
               v-if="yearBasedLccChartData"
               :data="yearBasedLccChartData" 
-              :options="stackedChartOptions"
+              :options="lccChartOptions"
             />
           </div>
         </CardContent>
@@ -760,7 +838,7 @@ const exportData = () => {
             <Bar 
               v-if="yearBasedLcaChartData"
               :data="yearBasedLcaChartData" 
-              :options="stackedChartOptions"
+              :options="lcaChartOptions"
             />
           </div>
         </CardContent>
