@@ -5,7 +5,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
-import { AlertTriangle, TrendingDown, Euro, Factory } from 'lucide-vue-next'
+import { TrendingDown, Euro, Factory } from 'lucide-vue-next'
 import { Line, Bar } from 'vue-chartjs'
 import {
   Chart as ChartJS,
@@ -250,10 +250,6 @@ const profileKey = computed(() => {
   return useScenario.value ? 'profile_combined' : 'profile_status_quo'
 })
 
-const currentProfileType = computed(() => {
-  return useScenario.value ? 'scenario' : 'status_quo'
-})
-
 // Additional watchers after computed properties
 watch(scenarioActivated, (newValue, oldValue) => {
   if (newValue !== oldValue) {
@@ -376,21 +372,6 @@ const reductionPathData = computed(() => {
   return {
     labels: allYears,
     datasets
-  }
-})
-
-// Stranding information
-const strandingInfo = computed(() => {
-  const results = emissionResults.value
-  if (!results?.stranding) return null
-
-  const profileType = currentProfileType.value
-  const strandingDate = results.stranding[profileType]
-  
-  return {
-    date: strandingDate,
-    difference: results.stranding.difference,
-    hasRisk: strandingDate !== null && strandingDate !== undefined
   }
 })
 
@@ -542,17 +523,6 @@ const operationCostsData = computed(() => {
     ]
   }
 })
-
-// Format date for display
-const formatStrandingDate = (dateString: string) => {
-  if (!dateString) return 'Nicht verfügbar'
-  const date = new Date(dateString)
-  return date.toLocaleDateString('de-DE', { 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
-  })
-}
 </script>
 
 <template>
@@ -609,6 +579,7 @@ const formatStrandingDate = (dateString: string) => {
     </div>
 
     <!-- Debug Information - Enabled for troubleshooting -->
+    <!--
     <div v-if="emissionResults" class="text-xs text-muted-foreground p-2 bg-gray-50 rounded">
       <p>Debug: Emission data available: {{ !!emissionResults }}</p>
       <p>Scenario activated: {{ scenarioActivated }}</p>
@@ -618,94 +589,55 @@ const formatStrandingDate = (dateString: string) => {
       <p>Has CO2 costs: {{ !!emissionResults?.co2_costs_tax }}</p>
       <p>Has operation costs: {{ !!emissionResults?.operation_costs }}</p>
     </div>
+    -->
 
     <!-- Main Content -->
     <div v-if="emissionResults" class="space-y-6">
-      <!-- Reduction Path Chart -->
-      <Card>
-        <CardHeader>
-          <CardTitle class="flex items-center space-x-2">
-            <TrendingDown class="h-5 w-5 text-green-600" />
-            <span>CO₂-Reduktionspfad</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div v-if="reductionPathData" class="h-80">
-            <Line 
-              :data="reductionPathData" 
-              :options="reductionPathOptions"
-            />
-          </div>
-          <div v-else class="h-80 flex items-center justify-center text-muted-foreground">
-            Keine Reduktionspfad-Daten verfügbar
-          </div>
-        </CardContent>
-      </Card>
-
-      <!-- Stranding Information -->
-      <Card>
-        <CardHeader>
-          <CardTitle class="flex items-center space-x-2">
-            <AlertTriangle class="h-5 w-5 text-orange-600" />
-            <span>Stranding Risiko</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div v-if="strandingInfo" class="space-y-4">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div class="space-y-2">
-                <h4 class="font-medium">Stranding Datum</h4>
-                <div v-if="strandingInfo.hasRisk" class="space-y-1">
-                  <p class="text-lg font-semibold text-orange-600">
-                    {{ formatStrandingDate(strandingInfo.date) }}
-                  </p>
-                  <Badge variant="destructive">Risiko vorhanden</Badge>
-                </div>
-                <div v-else class="space-y-1">
-                  <p class="text-lg font-semibold text-green-600">
-                    Kein Stranding
-                  </p>
-                  <Badge variant="default">Sicher</Badge>
-                </div>
-              </div>
-              <div class="space-y-2">
-                <h4 class="font-medium">Status</h4>
-                <p class="text-sm text-muted-foreground">
-                  {{ strandingInfo.difference }}
-                </p>
-              </div>
-            </div>
-          </div>
-          <div v-else class="text-muted-foreground">
-            Keine Stranding-Daten verfügbar
-          </div>
-        </CardContent>
-      </Card>
-
-      <!-- Scope Emissions Chart -->
-      <Card>
-        <CardHeader>
-          <CardTitle class="flex items-center space-x-2">
-            <Factory class="h-5 w-5 text-blue-600" />
-            <span>Scope Emissionen</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div v-if="scopeEmissionsData" class="h-80">
-            <Bar 
-              :data="scopeEmissionsData" 
-              :options="scopeEmissionsOptions"
-            />
-          </div>
-          <div v-else class="h-80 flex items-center justify-center text-muted-foreground">
-            Keine Scope-Emissions-Daten verfügbar
-          </div>
-        </CardContent>
-      </Card>
-
-      <!-- Costs Charts -->
+      <!-- Charts Grid - 2x2 Layout -->
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- CO2 Costs -->
+        <!-- Top Left: Reduction Path Chart -->
+        <Card>
+          <CardHeader>
+            <CardTitle class="flex items-center space-x-2">
+              <TrendingDown class="h-5 w-5 text-green-600" />
+              <span>CO₂-Reduktionspfad</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div v-if="reductionPathData" class="h-80">
+              <Line 
+                :data="reductionPathData" 
+                :options="reductionPathOptions"
+              />
+            </div>
+            <div v-else class="h-80 flex items-center justify-center text-muted-foreground">
+              Keine Reduktionspfad-Daten verfügbar
+            </div>
+          </CardContent>
+        </Card>
+
+        <!-- Top Right: Scope Emissions Chart -->
+        <Card>
+          <CardHeader>
+            <CardTitle class="flex items-center space-x-2">
+              <Factory class="h-5 w-5 text-blue-600" />
+              <span>Scope Emissionen</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div v-if="scopeEmissionsData" class="h-80">
+              <Bar 
+                :data="scopeEmissionsData" 
+                :options="scopeEmissionsOptions"
+              />
+            </div>
+            <div v-else class="h-80 flex items-center justify-center text-muted-foreground">
+              Keine Scope-Emissions-Daten verfügbar
+            </div>
+          </CardContent>
+        </Card>
+
+        <!-- Bottom Left: CO2 Tax Costs -->
         <Card>
           <CardHeader>
             <CardTitle class="flex items-center space-x-2">
@@ -714,19 +646,19 @@ const formatStrandingDate = (dateString: string) => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div v-if="co2CostsData" class="h-64">
+            <div v-if="co2CostsData" class="h-80">
               <Line 
                 :data="co2CostsData" 
                 :options="costsOptions"
               />
             </div>
-            <div v-else class="h-64 flex items-center justify-center text-muted-foreground">
+            <div v-else class="h-80 flex items-center justify-center text-muted-foreground">
               Keine CO₂-Kostendaten verfügbar
             </div>
           </CardContent>
         </Card>
 
-        <!-- Operation Costs -->
+        <!-- Bottom Right: Operation Costs -->
         <Card>
           <CardHeader>
             <CardTitle class="flex items-center space-x-2">
@@ -735,13 +667,13 @@ const formatStrandingDate = (dateString: string) => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div v-if="operationCostsData" class="h-64">
+            <div v-if="operationCostsData" class="h-80">
               <Line 
                 :data="operationCostsData" 
                 :options="costsOptions"
               />
             </div>
-            <div v-else class="h-64 flex items-center justify-center text-muted-foreground">
+            <div v-else class="h-80 flex items-center justify-center text-muted-foreground">
               Keine Betriebskostendaten verfügbar
             </div>
           </CardContent>
