@@ -14,10 +14,11 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import ArcGISSceneViewer from '@/components/map/ArcGISSceneViewer.vue'
 import LifecycleAnalysis from '@/components/analysis/LifecycleAnalysis.vue'
 import Dekarbonisierung from '@/components/analysis/Dekarbonisierung.vue'
-import { Plus, Settings, X, Zap, Factory, AlertTriangle, Euro, CircleFadingPlus, ChartNoAxesGantt, TrendingDown } from 'lucide-vue-next'
+import { Plus, Settings, X, Zap, Factory, AlertTriangle, Euro, CircleFadingPlus, ChartNoAxesGantt, TrendingDown, CheckCircle, AlertCircle } from 'lucide-vue-next'
 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { toast } from 'vue-sonner'
@@ -75,6 +76,11 @@ const isConstructionDetailsOpen = ref(false)
 
 // Analysis tab state
 const activeAnalysisTab = ref('energy') // 'energy', 'lifecycle', or 'dekarbonisierung'
+
+// Missing data state
+const missingData = ref<string[]>([])
+const isLoadingMissingData = ref(false)
+const missingDataError = ref('')
 
 // Store for undo functionality
 const deletedScenario = ref<RetrofitScenario | null>(null)
@@ -221,6 +227,13 @@ interface EnergyStandardsResponse {
   count: number
 }
 
+// Interface for missing data response
+interface MissingDataResponse {
+  status: string
+  gebid: string
+  missing_fields: string[]
+}
+
 // Interface for retrofit scenario
 interface RetrofitScenario {
   energy_standard: {
@@ -277,6 +290,8 @@ const searchBuilding = async (gebidToSearch: string) => {
     isSearching.value = true
     searchError.value = ''
     showViewer.value = false
+    missingData.value = []
+    missingDataError.value = ''
 
     try {
       const url = `${apiBaseUrl.value}/api/database/get_building_data/${encodeURIComponent(gebidToSearch)}`
@@ -302,6 +317,11 @@ const searchBuilding = async (gebidToSearch: string) => {
         buildingData.value = data
         console.log('💾 Stored buildingData:', buildingData.value)
         console.log('Building assumptions in stored data:', buildingData.value?.buildings_assumptions)
+        
+        // Fetch missing data for this building
+        fetchMissingData(gebidToSearch).catch(err => {
+          console.error('Non-blocking missing data fetch error:', err)
+        })
         
         // Extract GML IDs from the nested data structure
         if (data.gmlid_gebid_mapping && data.gmlid_gebid_mapping.length > 0) {
@@ -336,6 +356,48 @@ const searchBuilding = async (gebidToSearch: string) => {
     console.error('❌ Outer search error:', err)
     searchError.value = 'An unexpected error occurred'
     isSearching.value = false
+  }
+}
+
+// Fetch missing data for building
+const fetchMissingData = async (gebid: string) => {
+  try {
+    console.log('🔍 Fetching missing data for GEBID:', gebid)
+    
+    if (!gebid) {
+      console.log('❌ No GEBID provided for missing data fetch')
+      return
+    }
+
+    isLoadingMissingData.value = true
+    missingDataError.value = ''
+
+    const url = `${apiBaseUrl.value}/api/database/get_missing_data/${encodeURIComponent(gebid)}`
+    console.log('📡 Fetching missing data from URL:', url)
+    
+    const response = await fetch(url)
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
+    const responseData: MissingDataResponse = await response.json()
+    console.log('✅ Missing data response received:', responseData)
+
+    if (responseData.status === 'success') {
+      missingData.value = responseData.missing_fields || []
+      console.log('📋 Missing fields:', missingData.value)
+    } else {
+      missingDataError.value = `API returned status: ${responseData.status || 'unknown'}`
+      console.log('❌ API returned unsuccessful status:', responseData.status)
+    }
+
+  } catch (err) {
+    missingDataError.value = `Failed to fetch missing data: ${err instanceof Error ? err.message : 'Unknown error'}`
+    console.error('❌ Missing data fetch error:', err)
+  } finally {
+    isLoadingMissingData.value = false
+    console.log('🏁 Missing data fetch completed')
   }
 }
 
@@ -377,6 +439,8 @@ watch(() => {
       showViewer.value = false
       buildingData.value = null
       currentGmlIds.value = []
+      missingData.value = []
+      missingDataError.value = ''
     }
   } catch (err) {
     console.error('Error in route watcher callback:', err)
@@ -448,6 +512,10 @@ const fetchGeometry = async (gmlIds: string[]) => {
     
     // Extract actual building data instead of hard-coded values
     const assumptions = buildingData.value?.buildings_assumptions
+    if (!assumptions) {
+      throw new Error('Building assumptions data is missing')
+    }
+    
     const actualBuildingCategory = getBuildingCategory(assumptions)
     const actualConstructionYear = parseConstructionYear(assumptions?.epl)
     
@@ -463,7 +531,26 @@ const fetchGeometry = async (gmlIds: string[]) => {
     const response = await fetch(url)
     
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
+      let errorDetail = ''
+      try {
+        const errorData = await response.json()
+        console.error('❌ Geometry API error response:', errorData)
+        
+        if (Array.isArray(errorData.detail)) {
+          errorDetail = errorData.detail.map((err: any) => 
+            `${err.loc.join('.')}: ${err.msg} (${err.type})`
+          ).join('\n')
+        } else if (errorData.detail) {
+          errorDetail = errorData.detail
+        } else if (errorData.message) {
+          errorDetail = errorData.message
+        } else {
+          errorDetail = JSON.stringify(errorData)
+        }
+      } catch (e) {
+        errorDetail = `HTTP error! status: ${response.status}`
+      }
+      throw new Error(errorDetail)
     }
     
     const data: GeometryResponse = await response.json()
@@ -881,6 +968,23 @@ const formatDisplayValue = (value: any) => {
   return value
 }
 
+// Translate field names to German for better UX
+const translateFieldName = (fieldName: string): string => {
+  const fieldTranslations: { [key: string]: string } = {
+    'verxxh': 'Verbrauchsabrechnung',
+    'epl': 'Energieausweis',
+    'babez': 'Baualtersklasse',
+    'ligbez': 'Liegenschaftsbezeichnung',
+    'gebzabt': 'Gebäudezuordnung',
+    'enob_category': 'EnOB-Kategorie',
+    'sq_standard': 'Status Quo Standard',
+    'is_heritage': 'Denkmalschutz',
+    'versorgung_emis_mp': 'Versorgung'
+  }
+  
+  return fieldTranslations[fieldName] || fieldName
+}
+
 // Handle modifying existing scenario
 const modifyRetrofitScenario = () => {
   try {
@@ -1003,6 +1107,19 @@ watch([energyCardData, emissionCardData, strandingCardData, costCardData],
       costData: cost
     })
   }, { deep: true })
+
+// Computed properties for missing data
+const hasMissingData = computed(() => {
+  return missingData.value.length > 0
+})
+
+const missingDataCount = computed(() => {
+  return missingData.value.length
+})
+
+const isDataComplete = computed(() => {
+  return missingData.value.length === 0
+})
 </script>
 
 <template>
@@ -1161,6 +1278,99 @@ watch([energyCardData, emissionCardData, strandingCardData, costCardData],
 
       <!-- 3D Viewer and Building Info -->
       <div v-if="buildingData && !isSearching" class="w-full">
+        <!-- Missing Data Checklist -->
+        <div class="mb-6">
+          <Accordion type="single" collapsible class="w-full">
+            <AccordionItem value="missing-data" class="border-l-4" :class="isDataComplete ? 'border-l-green-500' : 'border-l-orange-500'">
+              <AccordionTrigger class="px-6 py-4 hover:no-underline">
+                <div class="flex items-center justify-between w-full pr-4">
+                  <div class="flex items-center space-x-2">
+                    <CheckCircle v-if="isDataComplete" class="h-5 w-5 text-green-600" />
+                    <AlertCircle v-else class="h-5 w-5 text-orange-600" />
+                    <span class="text-base font-medium">
+                      {{ isDataComplete ? 'Daten vollständig' : `Fehlende Daten (${missingDataCount})` }}
+                    </span>
+                  </div>
+                  <Badge 
+                    :variant="isDataComplete ? 'default' : 'secondary'"
+                    class="text-xs"
+                  >
+                    {{ isDataComplete ? 'Vollständig' : 'Unvollständig' }}
+                  </Badge>
+                </div>
+              </AccordionTrigger>
+              
+              <AccordionContent class="px-6 pb-4">
+                <div class="space-y-3">
+                  <p class="text-sm text-muted-foreground">
+                    {{ isDataComplete 
+                      ? 'Alle erforderlichen Gebäudedaten sind verfügbar und die Analyse kann durchgeführt werden.' 
+                      : 'Einige Gebäudedaten fehlen noch. Die Analyse kann mit eingeschränkter Genauigkeit durchgeführt werden.' 
+                    }}
+                  </p>
+                  
+                  <!-- Loading state -->
+                  <div v-if="isLoadingMissingData" class="space-y-2">
+                    <Skeleton class="h-4 w-full" />
+                    <Skeleton class="h-4 w-3/4" />
+                  </div>
+                  
+                  <!-- Error state -->
+                  <div v-else-if="missingDataError" class="bg-red-50 border border-red-200 rounded-md p-3">
+                    <p class="text-sm text-red-600">{{ missingDataError }}</p>
+                  </div>
+                  
+                  <!-- Complete data state -->
+                  <div v-else-if="isDataComplete" class="flex items-center space-x-2 text-green-700">
+                    <CheckCircle class="h-4 w-4" />
+                    <span class="text-sm font-medium">Alle erforderlichen Daten sind vorhanden</span>
+                  </div>
+                  
+                  <!-- Missing data checklist -->
+                  <div v-else-if="hasMissingData" class="space-y-3">
+                    <p class="text-sm text-muted-foreground mb-2">
+                      Folgende Datenfelder fehlen noch für eine vollständige Analyse:
+                    </p>
+                    <div class="space-y-2">
+                      <div 
+                        v-for="field in missingData" 
+                        :key="field"
+                        class="flex items-center space-x-3 p-3 bg-orange-50 border border-orange-200 rounded-lg"
+                      >
+                        <Checkbox 
+                          :checked="false" 
+                          :disabled="true"
+                          class="border-orange-300"
+                        />
+                        <div class="flex-1">
+                          <span class="text-sm font-medium text-orange-800">{{ translateFieldName(field) }}</span>
+                          <p class="text-xs text-orange-600 mt-1">
+                            Dieses Feld muss ergänzt werden, um eine vollständige Analyse zu ermöglichen.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div class="flex items-start space-x-2">
+                        <AlertTriangle class="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                        <div class="text-sm text-blue-800">
+                          <p class="font-medium mb-1">Hinweis zur Analyse</p>
+                          <p>
+                            Die Analyse kann auch mit fehlenden Daten durchgeführt werden, 
+                            verwendet jedoch Standardwerte für die fehlenden Felder. 
+                            Dies kann die Genauigkeit der Ergebnisse beeinflussen.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        </div>
+        
         <!-- Analysis Tabs -->
         <div class="mb-6">
           <Tabs v-model="activeAnalysisTab" class="w-full">

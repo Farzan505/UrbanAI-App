@@ -15,7 +15,9 @@ const showSearch = computed(() => {
   return route.name === 'home' || 
          route.name === 'gebid' || 
          route.name === 'building-analysis' || 
-         route.name === 'building-analysis-gebid'
+         route.name === 'building-analysis-gebid' ||
+         route.name === 'data-management' ||
+         route.name === 'data-management-gebid'
 })
 
 // Watch for route changes and update search input
@@ -43,6 +45,9 @@ const handleSearch = async () => {
     if (route.path === '/data-sources' || route.name === 'data-sources') {
       // Stay on data sources page but add gebid as query param
       await router.push(`/data-sources?gebid=${trimmedGebid}`)
+    } else if (route.path.startsWith('/data-management') || route.name === 'data-management' || route.name === 'data-management-gebid') {
+      // Navigate to data management with gebid
+      await router.push(`/data-management/gebid=${trimmedGebid}`)
     } else {
       // Navigate to building analysis with gebid
       await router.push(`/buildinganalysis/gebid=${trimmedGebid}`)

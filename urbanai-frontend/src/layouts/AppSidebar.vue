@@ -6,6 +6,7 @@ import {
   Building2,
   CircleGauge,
   HousePlus,
+  Database,
 } from "lucide-vue-next"
 import {
   Sidebar,
@@ -56,6 +57,12 @@ const items = computed(() => [
     url: currentGebid.value ? `/data-sources?gebid=${currentGebid.value}` : "/data-sources",
     icon: BookOpen,
     isActive: route.path === '/data-sources',
+  },
+  {
+    title: "Datenbearbeitung",
+    url: currentGebid.value ? `/data-management?gebid=${currentGebid.value}` : "/data-management",
+    icon: Database,
+    isActive: route.path === '/data-management',
   },
 ])
 </script>

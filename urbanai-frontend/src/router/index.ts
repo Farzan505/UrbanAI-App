@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import AppLayout from '@/layouts/AppLayout.vue'
 import BuildingViewer from '@/pages/BuildingViewer.vue'
 import DataSources from '@/pages/DataSources.vue'
+import DataManagement from '@/pages/DataManagement.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -38,6 +39,17 @@ const router = createRouter({
           path: 'data-sources',
           name: 'data-sources',
           component: DataSources
+        },
+        {
+          path: 'data-management',
+          name: 'data-management',
+          component: DataManagement
+        },
+        {
+          path: 'data-management/gebid=:gebid',
+          name: 'data-management-gebid',
+          component: DataManagement,
+          props: true
         }
       ]
     }
