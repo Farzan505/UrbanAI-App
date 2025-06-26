@@ -8,7 +8,7 @@ import { Switch } from '@/components/ui/switch'
 import { Bar } from 'vue-chartjs'
 import { Chart as ChartJS, Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale } from 'chart.js'
 import { Zap, Download, Building } from 'lucide-vue-next'
-import ArcGISSceneViewer from '@/components/map/ArcGISSceneViewer.vue'
+import EnergySceneViewer from '@/components/map/EnergySceneViewer.vue'
 
 // Register Chart.js components
 ChartJS.register(Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale)
@@ -57,33 +57,36 @@ watch(() => props.geometryData, (newData, oldData) => {
 
 // Use real data if available, otherwise use loaded mock data
 const effectiveEmissionResults = computed(() => {
-  return props.emissionResults || mockEmissionResults.value
+  // If we have props.emissionResults, use it directly
+  if (props.emissionResults) {
+    return props.emissionResults
+  }
+  
+  // Otherwise, try to use mock data
+  if (mockEmissionResults.value) {
+    return mockEmissionResults.value
+  }
+  
+  return null
 })
 
-// Extract only buildings and visualization_zone from geometry data
-const filteredGeometryData = computed(() => {
-  if (!props.geometryData) {
-    return null
-  }
-  
-  const filtered: any = {}
-  
-  // Extract buildings data
-  if (props.geometryData.buildings) {
-    filtered.buildings = props.geometryData.buildings
-  }
-  
-  // Extract visualization_zone data
-  if (props.geometryData.visualization_zone) {
-    filtered.visualization_zone = props.geometryData.visualization_zone
-  }
-  
-  return Object.keys(filtered).length > 0 ? filtered : null
+// Current GML IDs for the viewer
+const currentGmlIds = computed(() => {
+  return props.gmlIds || []
 })
 
 // Reactive state
 const selectedIndicator = ref('end_demand') // 'end_demand', 'net_demand', 'pe_total', 'pert', 'penrt'
 const showNormalized = ref(true) // Switch between normalized and total
+
+// Watch for switch changes to debug
+watch(showNormalized, (newValue, oldValue) => {
+  console.log('🔄 Switch changed:', { from: oldValue, to: newValue, valueType: newValue ? 'normalized' : 'total' })
+}, { immediate: true })
+
+watch(selectedIndicator, (newValue, oldValue) => {
+  console.log('📊 Indicator changed:', { from: oldValue, to: newValue })
+}, { immediate: true })
 
 // Available indicators with German labels
 const energyIndicators = [
@@ -106,10 +109,30 @@ function formatNumber(value: number | null | undefined, decimals: number = 1): s
 // Computed data for the selected indicator
 const chartData = computed(() => {
   const results = effectiveEmissionResults.value
-  if (!results || !results[selectedIndicator.value]) return null
+  console.log('📊 Chart Data Debug:', {
+    hasResults: !!results,
+    selectedIndicator: selectedIndicator.value,
+    showNormalized: showNormalized.value,
+    valueType: showNormalized.value ? 'normalized' : 'total_area_adjusted',
+    availableIndicators: results ? Object.keys(results) : null,
+    indicatorData: results?.[selectedIndicator.value]
+  })
+  
+  if (!results || !results[selectedIndicator.value]) {
+    console.log('❌ No results or indicator data available')
+    return null
+  }
 
   const indicatorData = results[selectedIndicator.value]
-  const valueType = showNormalized.value ? 'normalized' : 'total'
+  const valueType = showNormalized.value ? 'normalized' : 'total_area_adjusted'
+  
+  console.log('🔍 Processing indicator data:', {
+    indicator: selectedIndicator.value,
+    valueType,
+    indicatorData,
+    statusQuo: indicatorData.status_quo,
+    scenario: indicatorData.scenario
+  })
   
   // Extract status quo and scenario data
   const statusQuoData = indicatorData.status_quo || {}
@@ -221,7 +244,7 @@ const summaryData = computed(() => {
   const results = effectiveEmissionResults.value
   if (!results) return null
 
-  const valueType = showNormalized.value ? 'normalized' : 'total'
+  const valueType = showNormalized.value ? 'normalized' : 'total_area_adjusted'
 
   return {
     endDemand: {
@@ -348,16 +371,19 @@ const exportData = () => {
         </CardHeader>
         <CardContent>
           <div class="h-96 w-full rounded-lg border bg-muted">
-            <ArcGISSceneViewer 
-              v-if="gmlIds.length > 0 || filteredGeometryData"
-              :gml-ids="gmlIds"
-              :geometry-data="filteredGeometryData"
-              class="w-full h-full rounded-lg"
-            />
-            <div v-else class="flex items-center justify-center h-full text-muted-foreground">
-              <div class="text-center">
+            <div v-if="currentGmlIds.length > 0" class="h-full w-full">
+              <EnergySceneViewer 
+                :gml-ids="currentGmlIds"
+                :api-base-url="apiBaseUrl"
+                :geometry-data="geometryData"
+                :geometry-loading="geometryLoading"
+                class="w-full h-full block"
+              />
+            </div>
+            <div v-else class="h-full flex items-center justify-center">
+              <div class="text-center text-muted-foreground">
                 <Building class="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>Keine 3D-Daten verfügbar</p>
+                <p>Keine GML-IDs verfügbar für die Visualisierung</p>
                 <p class="text-sm">Führen Sie eine Gebäudeanalyse durch, um die 3D-Visualisierung zu aktivieren.</p>
               </div>
             </div>
@@ -436,4 +462,4 @@ const exportData = () => {
 
 <style scoped>
 /* Add any custom styles here */
-</style> 
+</style>
