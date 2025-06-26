@@ -538,10 +538,7 @@ const exportData = () => {
       
       <div class="flex items-center space-x-4">
         <!-- Export Button -->
-        <Button variant="outline" size="sm" @click="exportData">
-          <Download class="h-4 w-4 mr-2" />
-          Exportieren
-        </Button>
+
       </div>
     </div>
 
