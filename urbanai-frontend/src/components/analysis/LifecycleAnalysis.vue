@@ -141,14 +141,14 @@ const buildingLevelData = computed(() => {
 
     lcaData.forEach((item: any) => {
       if (item.indicator === 'gwptotal_a2') {
-        gwpTotal += item.scaled_value || 0
-        gwpPerM2 += item.raw_value || 0
+        gwpTotal += item.total_value || 0
+        gwpPerM2 += item.scaled_value_dynamic || 0
       } else if (item.indicator === 'pert') {
-        pertTotal += item.scaled_value || 0
-        pertPerM2 += item.raw_value || 0
+        pertTotal += item.total_value || 0
+        pertPerM2 += item.scaled_value_dynamic || 0
       } else if (item.indicator === 'penrt') {
-        penrtTotal += item.scaled_value || 0
-        penrtPerM2 += item.raw_value || 0
+        penrtTotal += item.total_value || 0
+        penrtPerM2 += item.scaled_value_dynamic || 0
       }
     })
 
@@ -210,13 +210,52 @@ const componentLevelData = computed(() => {
       total_cost: totalCost,
       cost_per_m2: costPerM2,
       eventType: item.event_type,
+      cause: item.cause,
+      module: item.module
+    })
+    return acc
+  }, {})
+
+  // Process LCA data by material - group by year and indicator
+  const lcaData = componentData.lca_by_material || []
+  const lcaByYear = lcaData.reduce((acc: any, item: any) => {
+    // Use year if available, otherwise replacement_year, otherwise default to 2030
+    const year = item.year || item.replacement_year || 2030
+    const indicator = item.indicator
+    
+    if (!acc[year]) {
+      acc[year] = {
+        year,
+        indicators: {}
+      }
+    }
+    
+    if (!acc[year].indicators[indicator]) {
+      acc[year].indicators[indicator] = {
+        indicator,
+        unit: item.unit,
+        materials: []
+      }
+    }
+    
+    acc[year].indicators[indicator].materials.push({
+      name: item.name_de,
+      uuid: item.uuid,
+      position_number: item.position_number,
+      lifespan: item.lifespan,
+      total_value: item.total_value || 0,
+      raw_value: item.raw_value || 0,
+      scaled_value: item.scaled_value || 0,
+      scaled_value_dynamic: item.scaled_value_dynamic || item.scaled_value || 0,
+      module: item.module,
+      year: year,
+      eventType: item.event_type,
       cause: item.cause
     })
     return acc
   }, {})
 
-  // Process LCA data by material
-  const lcaData = componentData.lca_by_material || []
+  // Also keep the old structure for backward compatibility
   const lcaByIndicator = lcaData.reduce((acc: any, item: any) => {
     const indicator = item.indicator
     if (!acc[indicator]) {
@@ -228,11 +267,17 @@ const componentLevelData = computed(() => {
     }
     acc[indicator].materials.push({
       name: item.name_de,
-      value: item.total_value || 0,
+      uuid: item.uuid,
+      position_number: item.position_number,
+      lifespan: item.lifespan,
+      total_value: item.total_value || 0,
       raw_value: item.raw_value || 0,
       scaled_value: item.scaled_value || 0,
+      scaled_value_dynamic: item.scaled_value_dynamic || item.scaled_value || 0,
       module: item.module,
-      replacementYear: item.replacement_year
+      year: item.year || item.replacement_year || 2030,
+      eventType: item.event_type,
+      cause: item.cause
     })
     return acc
   }, {})
@@ -244,6 +289,7 @@ const componentLevelData = computed(() => {
       timeline: Object.values(lccByYear).sort((a: any, b: any) => a.year - b.year)
     },
     lca: {
+      byYear: lcaByYear,
       byIndicator: lcaByIndicator,
       indicators: Object.keys(lcaByIndicator)
     }
@@ -372,25 +418,22 @@ const lccChartOptions = computed(() => {
 const yearBasedLcaChartData = computed(() => {
   if (!componentLevelData.value) return null
 
-  const lcaData = componentLevelData.value.lca.byIndicator || {}
+  const lcaByYear = componentLevelData.value.lca.byYear || {}
   const indicator = selectedIndicator.value
   
-  if (!lcaData[indicator]) return null
+  // Get all years that have data for the selected indicator
+  const yearsWithData = Object.keys(lcaByYear).filter(year => 
+    lcaByYear[year].indicators && lcaByYear[year].indicators[indicator]
+  ).sort((a, b) => parseInt(a) - parseInt(b))
 
-  // Group LCA data by replacement year
-  const materialsByYear: Record<number, any[]> = {}
-  lcaData[indicator].materials.forEach((material: any) => {
-    const year = material.replacementYear || 2030 // Default to 2030 if no replacement year
-    if (!materialsByYear[year]) {
-      materialsByYear[year] = []
-    }
-    materialsByYear[year].push(material)
-  })
+  if (yearsWithData.length === 0) return null
 
-  const years = Object.keys(materialsByYear).sort((a, b) => parseInt(a) - parseInt(b))
+  // Get all unique materials across all years for this indicator
   const allMaterials = new Set()
-  Object.values(materialsByYear).forEach(materials => {
-    materials.forEach(material => allMaterials.add(material.name))
+  yearsWithData.forEach(year => {
+    lcaByYear[year].indicators[indicator].materials.forEach((material: any) => {
+      allMaterials.add(material.name)
+    })
   })
 
   const materialColors = [
@@ -400,19 +443,31 @@ const yearBasedLcaChartData = computed(() => {
 
   const datasets = Array.from(allMaterials).map((materialName, index) => ({
     label: materialName as string,
-    data: years.map(year => {
-      const material = materialsByYear[parseInt(year)]?.find((m: any) => m.name === materialName)
-      if (!material) return 0
-      // Use showPerM2 toggle to determine which field to use
-      return showPerM2.value ? (material.raw_value || 0) : (material.scaled_value || 0)
+    data: yearsWithData.map(year => {
+      const yearData = lcaByYear[year].indicators[indicator]
+      const materials = yearData.materials.filter((m: any) => m.name === materialName)
+      
+      // Sum up values for the same material in the same year (in case there are multiple entries)
+      const totalValue = materials.reduce((sum: number, material: any) => {
+        // Use total_value when not per m², scaled_value_dynamic when per m²
+        const value = showPerM2.value ? (material.scaled_value_dynamic || 0) : (material.total_value || 0)
+        return sum + value
+      }, 0)
+      
+      return totalValue
     }),
     backgroundColor: materialColors[index % materialColors.length],
     borderColor: materialColors[index % materialColors.length],
-    borderWidth: 1
+    borderWidth: 1,
+    // Store additional data for tooltips
+    materialData: yearsWithData.map(year => {
+      const yearData = lcaByYear[year].indicators[indicator]
+      return yearData.materials.filter((m: any) => m.name === materialName)
+    })
   }))
 
   return {
-    labels: years,
+    labels: yearsWithData,
     datasets
   }
 })
@@ -432,7 +487,29 @@ const lcaChartOptions = computed(() => {
       tooltip: {
         callbacks: {
           label: function(context: any) {
-            return `${context.dataset.label}: ${formatNumber(context.parsed.y)} ${unit}`
+            const baseLabel = `${context.dataset.label}: ${formatNumber(context.parsed.y)} ${unit}`
+            return baseLabel
+          },
+          afterLabel: function(context: any) {
+            // Get the material data for this specific point
+            const dataset = context.dataset
+            const dataIndex = context.dataIndex
+            
+            if (dataset.materialData && dataset.materialData[dataIndex]) {
+              const materials = dataset.materialData[dataIndex]
+              if (materials.length > 0) {
+                const additionalInfo: string[] = []
+                materials.forEach((material: any) => {
+                  additionalInfo.push(`Modul: ${material.module}`)
+
+                  if (material.cause) {
+                    additionalInfo.push(`Ursache: ${material.cause}`)
+                  }
+                })
+                return additionalInfo
+              }
+            }
+            return []
           }
         }
       },
@@ -538,7 +615,10 @@ const exportData = () => {
       
       <div class="flex items-center space-x-4">
         <!-- Export Button -->
-
+        <Button variant="outline" size="sm" @click="exportData">
+          <Download class="h-4 w-4 mr-2" />
+          Exportieren
+        </Button>
       </div>
     </div>
 

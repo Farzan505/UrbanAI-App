@@ -201,7 +201,7 @@ onMounted(async () => {
   try {
     // Load sample data for testing if no props data is available
     if (!props.emissionData) {
-      const response = await fetch('/sample-retrofit-analysis-response.json')
+      const response = await fetch('/src/sample-retrofit-analysis-response.json')
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
