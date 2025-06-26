@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import ArcGISSceneViewer from '@/components/map/ArcGISSceneViewer.vue'
 import LifecycleAnalysis from '@/components/analysis/LifecycleAnalysis.vue'
+import EnergyAnalysis from '@/components/analysis/EnergyAnalysis.vue'
 import Dekarbonisierung from '@/components/analysis/Dekarbonisierung.vue'
 import { Plus, Settings, X, Zap, Factory, AlertTriangle, Euro, CircleFadingPlus, ChartNoAxesGantt, TrendingDown, CheckCircle, AlertCircle } from 'lucide-vue-next'
 
@@ -75,7 +76,7 @@ const energyStandards = ref<EnergyStandardsResponse | null>(null)
 const isConstructionDetailsOpen = ref(false)
 
 // Analysis tab state
-const activeAnalysisTab = ref('energy') // 'energy', 'lifecycle', or 'dekarbonisierung'
+const activeAnalysisTab = ref('overview') // 'overview', 'energy', 'lifecycle', or 'dekarbonisierung'
 
 // Missing data state
 const missingData = ref<string[]>([])
@@ -1374,10 +1375,14 @@ const isDataComplete = computed(() => {
         <!-- Analysis Tabs -->
         <div class="mb-6">
           <Tabs v-model="activeAnalysisTab" class="w-full">
-            <TabsList class="grid w-full grid-cols-3 max-w-lg">
-              <TabsTrigger value="energy" class="flex items-center space-x-2">
+            <TabsList class="grid w-full grid-cols-4 max-w-2xl">
+              <TabsTrigger value="overview" class="flex items-center space-x-2">
                 <ChartNoAxesGantt class="h-4 w-4" />
                 <span>Überblick</span>
+              </TabsTrigger>
+              <TabsTrigger value="energy" class="flex items-center space-x-2">
+                <Zap class="h-4 w-4" />
+                <span>Energie</span>
               </TabsTrigger>
               <TabsTrigger value="lifecycle" class="flex items-center space-x-2">
                 <CircleFadingPlus class="h-4 w-4" />
@@ -1393,8 +1398,8 @@ const isDataComplete = computed(() => {
         
         <!-- Tab Content -->
         <div class="mt-6">
-          <!-- Energy Analysis Tab Content -->
-          <div v-if="activeAnalysisTab === 'energy'">
+          <!-- Overview Tab Content -->
+          <div v-if="activeAnalysisTab === 'overview'">
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           <!-- Building Information -->
           <div class="lg:col-span-1">
@@ -2322,6 +2327,18 @@ const isDataComplete = computed(() => {
                 </CardContent>
               </Card>
             </div>
+          </div>
+          
+          <!-- Energy Tab Content -->
+          <div v-else-if="activeAnalysisTab === 'energy'">
+            <EnergyAnalysis 
+              :emission-results="retrofitAnalysisResult?.data?.emission_results || null"
+              :gml-ids="currentGmlIds"
+              :geometry-data="geometryData"
+              :geometry-loading="geometryLoading"
+              :api-base-url="apiBaseUrl"
+              :is-loading="isAnalyzingRetrofit"
+            />
           </div>
           
           <!-- Lifecycle Analysis Tab Content -->
