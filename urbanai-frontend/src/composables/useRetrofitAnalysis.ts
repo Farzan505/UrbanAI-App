@@ -53,6 +53,140 @@ export function useRetrofitAnalysis() {
   // API base URL
   const apiBaseUrl = ref('http://localhost:8080')
 
+  // Custom serialization function that preserves all keys and handles problematic values
+  const safeJSONStringify = (obj: any): string => {
+    const seen = new WeakSet()
+    const issues: string[] = []
+    
+    const replacer = (key: string, value: any) => {
+      // Handle circular references
+      if (typeof value === 'object' && value !== null) {
+        if (seen.has(value)) {
+          issues.push(`Circular reference found at key: ${key}`)
+          return '[Circular Reference]'
+        }
+        seen.add(value)
+      }
+      
+      // Skip undefined values entirely (don't include the key)
+      if (value === undefined) {
+        issues.push(`Undefined value found at key: ${key} - skipping`)
+        return undefined
+      }
+      
+      // Convert functions to string representation
+      if (typeof value === 'function') {
+        issues.push(`Function found at key: ${key}`)
+        return `[Function: ${value.name || 'anonymous'}]`
+      }
+      
+      // Handle special number values
+      if (typeof value === 'number') {
+        if (isNaN(value)) {
+          issues.push(`NaN found at key: ${key}`)
+          return null
+        }
+        if (!isFinite(value)) {
+          issues.push(`Infinite number found at key: ${key}`)
+          return null
+        }
+      }
+      
+      return value
+    }
+    
+    const result = JSON.stringify(obj, replacer, 2)
+    
+    if (issues.length > 0) {
+      console.warn('🚨 Serialization issues found:', issues)
+    }
+    
+    return result
+  }
+
+  // Function to compare objects before and after serialization
+  const validateGeometryDataSerialization = (original: any, description: string = '') => {
+    console.log(`🔍 Validating geometry data serialization ${description}...`)
+    
+    const originalKeys = Object.keys(original || {})
+    console.log(`📊 Original geometry data has ${originalKeys.length} keys:`, originalKeys)
+    
+    try {
+      const serialized = safeJSONStringify(original)
+      const parsed = JSON.parse(serialized)
+      const parsedKeys = Object.keys(parsed || {})
+      
+      console.log(`📊 After serialization has ${parsedKeys.length} keys:`, parsedKeys)
+      
+      const lostKeys = originalKeys.filter(key => !parsedKeys.includes(key))
+      const gainedKeys = parsedKeys.filter(key => !originalKeys.includes(key))
+      
+      if (lostKeys.length > 0) {
+        console.error('❌ Lost keys during serialization:', lostKeys)
+        lostKeys.forEach(key => {
+          console.error(`❌ Lost key "${key}" had value:`, typeof original[key], original[key])
+        })
+      }
+      
+      if (gainedKeys.length > 0) {
+        console.warn('➕ New keys after serialization:', gainedKeys)
+      }
+      
+      if (lostKeys.length === 0 && gainedKeys.length === 0) {
+        console.log('✅ All keys preserved during serialization')
+      }
+      
+      return { serialized, parsed, lostKeys, gainedKeys }
+      
+    } catch (error) {
+      console.error('❌ Serialization validation failed:', error)
+      return { serialized: null, parsed: null, lostKeys: originalKeys, gainedKeys: [] }
+    }
+  }
+
+  // Safe deep copy function that preserves data types better than JSON.parse(JSON.stringify())
+  const safeDeepCopy = (obj: any): any => {
+    if (obj === null || typeof obj !== 'object') {
+      return obj
+    }
+    
+    if (obj instanceof Date) {
+      return new Date(obj.getTime())
+    }
+    
+    if (obj instanceof Array) {
+      return obj.map(item => safeDeepCopy(item))
+    }
+    
+    if (typeof obj === 'object') {
+      const copy: any = {}
+      for (const key in obj) {
+        if (obj.hasOwnProperty(key)) {
+          // Skip undefined values
+          if (obj[key] !== undefined) {
+            copy[key] = safeDeepCopy(obj[key])
+          }
+        }
+      }
+      return copy
+    }
+    
+    return obj
+  }
+
+  // Clean geometry data to ensure it's properly formatted for the API
+  const cleanGeometryData = (geometryData: any): any => {
+    if (!geometryData) return {}
+    
+    // If it's already the results object, use it directly
+    if (geometryData.results) {
+      return safeDeepCopy(geometryData.results)
+    }
+    
+    // Otherwise, assume it's the geometry data itself
+    return safeDeepCopy(geometryData)
+  }
+
   // Helper functions
   const getBuildingCategory = (assumptions: any): string => {
     const enobCategory = assumptions?.enob_category
@@ -110,29 +244,60 @@ export function useRetrofitAnalysis() {
       
       const actualBuildingCategory = getBuildingCategory(assumptions)
       const actualConstructionYear = parseConstructionYear(assumptions?.construction_year)
-      const geometryDataCopy = { ...geometryData.results }
+      
+      // Extract and preserve the results data properly
+      const geometryResults = cleanGeometryData(geometryData)
+      
+      console.log('🔍 Base scenario geometry data validation:')
+      console.log('  - Original geometryData has results:', !!geometryData.results)
+      console.log('  - Results keys (GML IDs):', Object.keys(geometryData.results || {}))
+      console.log('  - Extracted results keys (GML IDs):', Object.keys(geometryResults))
+      console.log('  - Results type:', typeof geometryResults)
+      console.log('  - Sample GML data structure:', Object.keys(geometryResults).length > 0 ? 
+        Object.keys(geometryResults)[0] + ': ' + JSON.stringify(Object.keys(geometryResults[Object.keys(geometryResults)[0]] || {})) : 'No GML data')
+
+      // Validate serialization before sending
+      validateGeometryDataSerialization(geometryResults, 'for base scenario')
 
       const payload: RetrofitAnalysisPayload = {
         building_id: assumptions.building_id,
         gebplz: gebplz,
         building_category: actualBuildingCategory,
         construction_year: actualConstructionYear,
-        geometry_data: geometryDataCopy,
         gmlid_list: gmlIds,
         system_type: assumptions.current_system_type,
         retrofit_subsystem_type: 'Gas',
         co2_reduction_scenario: selectedCo2PathScenario,
-        co2_cost_scenario: selectedCo2CostScenario
+        co2_cost_scenario: selectedCo2CostScenario,
+        geometry_data: geometryResults
       }
 
       console.log('📤 Sending base scenario payload:', payload)
+      console.log('📤 GEOMETRY_DATA in payload:', payload.geometry_data)
+      console.log('📤 GEOMETRY_DATA keys:', Object.keys(payload.geometry_data || {}))
+      console.log('📤 GEOMETRY_DATA type:', typeof payload.geometry_data)
+
+      // Debug each key individually before JSON.stringify
+      Object.keys(payload.geometry_data || {}).forEach(key => {
+        console.log(`📤 GEOMETRY_DATA[${key}]:`, typeof payload.geometry_data[key], payload.geometry_data[key])
+        try {
+          const serialized = safeJSONStringify(payload.geometry_data[key])
+          console.log(`📤 GEOMETRY_DATA[${key}] safeJSONStringify success:`, serialized ? 'YES' : 'NO')
+        } catch (e) {
+          console.error(`📤 GEOMETRY_DATA[${key}] safeJSONStringify ERROR:`, e)
+        }
+      })
+
+      // Log the complete request payload being sent
+      const requestBody = safeJSONStringify(payload)
+
 
       const response = await fetch(`${apiBaseUrl.value}/api/energy/analyze-retrofit`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(payload)
+        body: requestBody
       })
 
       if (!response.ok) {
@@ -156,6 +321,15 @@ export function useRetrofitAnalysis() {
 
       const data = await response.json()
       console.log('✅ Base scenario analysis response:', data)
+      
+      // Debug: Check if the response contains the original geometry_data structure
+      if (data && data.geometry_data) {
+        console.log('📥 RESPONSE geometry_data keys:', Object.keys(data.geometry_data || {}))
+        console.log('📥 RESPONSE geometry_data type:', typeof data.geometry_data)
+        console.log('📥 RESPONSE geometry_data sample:', data.geometry_data)
+      } else {
+        console.log('📥 RESPONSE does not contain geometry_data field')
+      }
       
       retrofitAnalysisResult.value = data
       console.log('🎯 Base scenario analysis completed successfully')
@@ -222,8 +396,19 @@ export function useRetrofitAnalysis() {
       const actualBuildingCategory = getBuildingCategory(assumptions)
       const actualConstructionYear = parseConstructionYear(assumptions?.epl)
       
-      // Use geometry data results if available, otherwise use the data directly
-      const geometryDataToUse = geometryData.results || geometryData
+      // Extract and preserve the results data properly
+      const geometryResults = cleanGeometryData(geometryData)
+      
+      console.log('🔍 Construction analysis geometry data validation:')
+      console.log('  - Original geometryData has results:', !!geometryData.results)
+      console.log('  - Results keys (GML IDs):', Object.keys(geometryData.results || {}))
+      console.log('  - Extracted results keys (GML IDs):', Object.keys(geometryResults))
+      console.log('  - Results type:', typeof geometryResults)
+      console.log('  - Sample GML data structure:', Object.keys(geometryResults).length > 0 ? 
+        Object.keys(geometryResults)[0] + ': ' + JSON.stringify(Object.keys(geometryResults[Object.keys(geometryResults)[0]] || {})) : 'No GML data')
+
+      // Validate serialization before sending
+      validateGeometryDataSerialization(geometryResults, 'for construction analysis')
 
       console.log('🏗️ Construction analysis data validation:', {
         building_id: assumptions.gebid,
@@ -249,7 +434,7 @@ export function useRetrofitAnalysis() {
         co2_reduction_scenario: selectedCo2PathScenario,
         co2_cost_scenario: selectedCo2CostScenario,
         gmlid_list: gmlIds,
-        geometry_data: geometryDataToUse,
+        geometry_data: geometryResults,
         dynamic_lca: constructionSelections.dynamic_lca,
         time_preference_rate: 0.03,
         retrofit_subsystem_type: retrofitScenario?.hvac?.hvac_type || 'Gas'
@@ -268,13 +453,23 @@ export function useRetrofitAnalysis() {
       }
 
       console.log('🏗️ Sending construction analysis payload:', payload)
+      console.log('🏗️ GEOMETRY_DATA in payload:', payload.geometry_data)
+      console.log('🏗️ GEOMETRY_DATA keys:', Object.keys(payload.geometry_data || {}))
+      console.log('🏗️ GEOMETRY_DATA type:', typeof payload.geometry_data)
+
+      // Log the complete request payload being sent
+      const requestBody = safeJSONStringify(payload)
+      console.log('🚀 COMPLETE REQUEST BODY for analyze-retrofit (construction analysis):')
+      console.log('📦 Full payload object:', payload)
+      console.log('📤 Serialized payload:', requestBody)
+      console.log('📊 Request body size:', requestBody.length, 'characters')
 
       const response = await fetch(`${apiBaseUrl.value}/api/energy/analyze-retrofit`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload)
+        body: requestBody
       })
 
       if (!response.ok) {
@@ -351,14 +546,28 @@ export function useRetrofitAnalysis() {
       const systemType = mapToSystemType(retrofitScenario?.hvac?.hvac_type)
       const actualBuildingCategory = getBuildingCategory(assumptions)
       const actualConstructionYear = parseConstructionYear(assumptions?.epl)
-      const geometryDataCopy = { ...geometryData.results }
+      
+      // Extract and preserve the results data properly
+      const geometryResults = cleanGeometryData(geometryData)
+
+      console.log('🔍 Retrofit scenario geometry data validation:')
+      console.log('  - Original geometryData has results:', !!geometryData.results)
+      console.log('  - Results keys (GML IDs):', Object.keys(geometryData.results || {}))
+      console.log('  - Extracted results keys (GML IDs):', Object.keys(geometryResults))
+      console.log('  - Results type:', typeof geometryResults)
+      console.log('  - Results is array?:', Array.isArray(geometryResults))
+      console.log('  - Sample GML data structure:', Object.keys(geometryResults).length > 0 ? 
+        Object.keys(geometryResults)[0] + ': ' + JSON.stringify(Object.keys(geometryResults[Object.keys(geometryResults)[0]] || {})) : 'No GML data')
+
+      // Validate serialization before sending
+      validateGeometryDataSerialization(geometryResults, 'for retrofit scenario')
 
       const payload: RetrofitAnalysisPayload = {
         building_id: assumptions.gebid,
         gebplz: gebplz,
         building_category: actualBuildingCategory,
         construction_year: actualConstructionYear,
-        geometry_data: geometryDataCopy,
+        geometry_data: geometryResults,
         gmlid_list: gmlIds,
         system_type: systemType,
         retrofit_subsystem_type: selectedHVACItem?.hvac_type || 'Gas',
@@ -366,12 +575,35 @@ export function useRetrofitAnalysis() {
         co2_cost_scenario: selectedCo2CostScenario
       }
 
+      console.log('📤 Sending retrofit scenario payload:', payload)
+      console.log('📤 GEOMETRY_DATA in payload:', payload.geometry_data)
+      console.log('📤 GEOMETRY_DATA keys:', Object.keys(payload.geometry_data || {}))
+      console.log('📤 GEOMETRY_DATA type:', typeof payload.geometry_data)
+
+      // Debug each key individually before JSON.stringify
+      Object.keys(payload.geometry_data || {}).forEach(key => {
+        console.log(`📤 GEOMETRY_DATA[${key}]:`, typeof payload.geometry_data[key], payload.geometry_data[key])
+        try {
+          const serialized = safeJSONStringify(payload.geometry_data[key])
+          console.log(`📤 GEOMETRY_DATA[${key}] safeJSONStringify success:`, serialized ? 'YES' : 'NO')
+        } catch (e) {
+          console.error(`📤 GEOMETRY_DATA[${key}] safeJSONStringify ERROR:`, e)
+        }
+      })
+
+      // Log the complete request payload being sent
+      const requestBody = safeJSONStringify(payload)
+      console.log('🚀 COMPLETE REQUEST BODY for analyze-retrofit (retrofit scenario):')
+      console.log('📦 Full payload object:', payload)
+      console.log('📤 Serialized payload:', requestBody)
+      console.log('📊 Request body size:', requestBody.length, 'characters')
+
       const response = await fetch(`${apiBaseUrl.value}/api/energy/analyze-retrofit`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(payload)
+        body: requestBody
       })
 
       if (!response.ok) {
