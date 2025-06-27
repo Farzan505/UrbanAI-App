@@ -694,13 +694,13 @@ const isScenarioValid = computed(() => {
 const getValidationMessage = computed(() => {
   try {
     if (!isEnergyStandardSelected.value && !isHVACSelected.value) {
-      return 'Bitte wählen Sie mindestens einen Energiestandard oder eine TGA-Maßnahme'
+      return 'Bitte wählen Sie mindestens einen Energiestandard oder eine Wärmeversorgungs-Maßnahme'
     }
     if (isEnergyStandardSelected.value && !constructionYear.value) {
       return 'Bitte geben Sie das Sanierungsjahr für die Konstruktion ein'
     }
     if (isHVACSelected.value && !hvacYear.value) {
-      return 'Bitte geben Sie das Sanierungsjahr für die TGA ein'
+      return 'Bitte geben Sie das Sanierungsjahr für die Wärmeversorgung ein'
     }
     return ''
   } catch (err) {
@@ -1429,7 +1429,7 @@ const isDataComplete = computed(() => {
                         <SheetHeader>
                           <SheetTitle>Sanierungszenario hinzufügen</SheetTitle>
                           <SheetDescription>
-                            Wählen Sie Konstruktions- und TGA-Maßnahmen für die Gebäudesanierung aus.
+                            Wählen Sie geeignete Maßnahmen zur Gebäudehülle und Wärmeversorgung im Rahmen der Gebäudesanierung aus.
                           </SheetDescription>
                         </SheetHeader>
                         
@@ -1455,14 +1455,14 @@ const isDataComplete = computed(() => {
                               <div class="space-y-4">
                                 <div>
                                   <h3 class="text-lg font-medium">
-                                    Energiestandard
+                                    Gebäudehülle
                                   </h3>
                                   <p class="text-sm text-muted-foreground">Auswahl des Energiestandards für die Sanierung</p>
                                 </div>
                                 
                                 <!-- Year Input for Construction -->
                                 <div class="space-y-2">
-                                  <Label for="construction-year">Sanierungsjahr Konstruktion</Label>
+                                  <Label for="construction-year">Sanierungsjahr Gebäudehülle</Label>
                                   <Input
                                     id="construction-year"
                                     v-model="constructionYear"
@@ -1511,14 +1511,14 @@ const isDataComplete = computed(() => {
                               <div class="space-y-4">
                                 <div>
                                   <h3 class="text-lg font-medium">
-                                    TGA (Technische Gebäudeausrüstung)
+                                    Wärmmeversorgung
                                   </h3>
-                                  <p class="text-sm text-muted-foreground">Auswahl der TGA-Maßnahmen</p>
+                                  <p class="text-sm text-muted-foreground">Auswahl der Maßnahme zur Wärmeversorgung</p>
                                 </div>
                                 
                                 <!-- Year Input for HVAC -->
                                 <div class="space-y-2">
-                                  <Label for="hvac-year">Sanierungsjahr TGA</Label>
+                                  <Label for="hvac-year">Sanierungsjahr Wärmeversorgung</Label>
                                   <Input
                                     id="hvac-year"
                                     v-model="hvacYear"
@@ -1531,7 +1531,7 @@ const isDataComplete = computed(() => {
                                 
                                 <!-- HVAC Type Selection -->
                                 <div class="space-y-2">
-                                  <Label for="hvac-type-select">TGA-Typ</Label>
+                                  <Label for="hvac-type-select">Auswahl des Systems</Label>
                                   <Select v-model="selectedHVACType">
                                     <SelectTrigger id="hvac-type-select">
                                       <SelectValue placeholder="Wählen Sie TGA-Typ..." />
@@ -1550,7 +1550,7 @@ const isDataComplete = computed(() => {
                                 
                                 <!-- Specific HVAC Selection -->
                                 <div v-if="selectedHVACType" class="space-y-2">
-                                  <Label for="hvac-item-select">{{ selectedHVACType }} Auswahl</Label>
+                                  <Label for="hvac-item-select">{{ selectedHVACType }} Spezifikation</Label>
                                   <Select v-model="selectedHVAC">
                                     <SelectTrigger id="hvac-item-select">
                                       <SelectValue placeholder="Wählen Sie spezifisches System..." />

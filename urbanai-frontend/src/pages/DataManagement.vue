@@ -589,9 +589,7 @@ const getStatusBadgeVariant = (value: string | null) => {
     <main class="w-full px-4 sm:px-6 lg:px-8 py-8 h-full overflow-auto">
       <div class="mb-8">
         <h1 class="text-3xl font-bold text-gray-900">Datenbearbeitung</h1>
-        <p class="text-gray-600 mt-2">
-          Zentrale Plattform für Datenqualitätskontrolle und Gebäudeinformationsverwaltung
-        </p>
+
       </div>
 
       <!-- Error Message -->
