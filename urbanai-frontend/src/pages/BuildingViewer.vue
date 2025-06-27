@@ -2348,6 +2348,7 @@ const isDataComplete = computed(() => {
           <div v-else-if="activeAnalysisTab === 'lifecycle'">
             <LifecycleAnalysis 
               :lca-lcc-results="retrofitAnalysisResult?.data?.lca_lcc_results || null"
+              :summary-data="retrofitAnalysisResult?.data?.summary || null"
               :building-data="buildingData"
               :geometry-data="geometryData"
               :co2-path-scenarios="co2PathScenarios"

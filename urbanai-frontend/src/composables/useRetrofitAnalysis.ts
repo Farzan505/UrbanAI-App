@@ -349,7 +349,7 @@ export function useRetrofitAnalysis() {
         console.log(`📤 GEOMETRY_DATA[${key}]:`, typeof payload.geometry_data[key], payload.geometry_data[key])
         try {
           const serialized = safeJSONStringify(payload.geometry_data[key])
-          console.log(`📤 GEOMETRY_DATA[${key}] safeJSONStringify success:`, serialized ? 'YES' : 'NO')
+
         } catch (e) {
           console.error(`📤 GEOMETRY_DATA[${key}] safeJSONStringify ERROR:`, e)
         }
@@ -447,12 +447,7 @@ export function useRetrofitAnalysis() {
 
       // Use gebplz directly from assumptions, fallback to extracting from gebid
       const gebplz = assumptions.gebplz || assumptions.gebid?.substring(0, 5) || '00000'
-      console.log('🏗️ Gebplz extraction:', {
-        original_gebplz: assumptions.gebplz,
-        gebid: assumptions.gebid,
-        extracted_gebplz: gebplz,
-        gebplz_length: gebplz.length
-      })
+
 
       if (gebplz.length < 5) {
         throw new Error(`Ungültige Postleitzahl: ${gebplz}. Mindestens 5 Zeichen erforderlich.`)
@@ -466,13 +461,6 @@ export function useRetrofitAnalysis() {
       // Extract and preserve the results data properly
       const geometryResults = cleanGeometryData(geometryData)
       
-      console.log('🔍 Construction analysis geometry data validation:')
-      console.log('  - Original geometryData has results:', !!geometryData.results)
-      console.log('  - Results keys (GML IDs):', Object.keys(geometryData.results || {}))
-      console.log('  - Extracted results keys (GML IDs):', Object.keys(geometryResults))
-      console.log('  - Results type:', typeof geometryResults)
-      console.log('  - Sample GML data structure:', Object.keys(geometryResults).length > 0 ? 
-        Object.keys(geometryResults)[0] + ': ' + JSON.stringify(Object.keys(geometryResults[Object.keys(geometryResults)[0]] || {})) : 'No GML data')
 
       // Validate serialization before sending
       validateGeometryDataSerialization(geometryResults, 'for construction analysis')
@@ -510,8 +498,7 @@ export function useRetrofitAnalysis() {
       const requestBody = safeJSONStringify(payload)
       console.log('🚀 COMPLETE REQUEST BODY for analyze-retrofit (construction analysis):')
       console.log('📦 Full payload object:', payload)
-      console.log('📤 Serialized payload:', requestBody)
-      console.log('📊 Request body size:', requestBody.length, 'characters')
+
 
       const response = await fetch(`${apiBaseUrl.value}/api/energy/analyze-retrofit`, {
         method: 'POST',
@@ -599,14 +586,7 @@ export function useRetrofitAnalysis() {
       // Extract and preserve the results data properly
       const geometryResults = cleanGeometryData(geometryData)
 
-      console.log('🔍 Retrofit scenario geometry data validation:')
-      console.log('  - Original geometryData has results:', !!geometryData.results)
-      console.log('  - Results keys (GML IDs):', Object.keys(geometryData.results || {}))
-      console.log('  - Extracted results keys (GML IDs):', Object.keys(geometryResults))
-      console.log('  - Results type:', typeof geometryResults)
-      console.log('  - Results is array?:', Array.isArray(geometryResults))
-      console.log('  - Sample GML data structure:', Object.keys(geometryResults).length > 0 ? 
-        Object.keys(geometryResults)[0] + ': ' + JSON.stringify(Object.keys(geometryResults[Object.keys(geometryResults)[0]] || {})) : 'No GML data')
+
 
       // Validate serialization before sending
       validateGeometryDataSerialization(geometryResults, 'for retrofit scenario')
@@ -623,9 +603,7 @@ export function useRetrofitAnalysis() {
       )
 
       console.log('📤 Sending retrofit scenario payload:', payload)
-      console.log('📤 GEOMETRY_DATA in payload:', payload.geometry_data)
-      console.log('📤 GEOMETRY_DATA keys:', Object.keys(payload.geometry_data || {}))
-      console.log('📤 GEOMETRY_DATA type:', typeof payload.geometry_data)
+
 
       // Debug each key individually before JSON.stringify
       Object.keys(payload.geometry_data || {}).forEach(key => {
@@ -642,8 +620,7 @@ export function useRetrofitAnalysis() {
       const requestBody = safeJSONStringify(payload)
       console.log('🚀 COMPLETE REQUEST BODY for analyze-retrofit (retrofit scenario):')
       console.log('📦 Full payload object:', payload)
-      console.log('📤 Serialized payload:', requestBody)
-      console.log('📊 Request body size:', requestBody.length, 'characters')
+
 
       const response = await fetch(`${apiBaseUrl.value}/api/energy/analyze-retrofit`, {
         method: 'POST',

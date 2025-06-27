@@ -42,9 +42,6 @@ const props = defineProps<Props>()
 // Toggle state for scenario vs status quo
 const useScenario = ref(false)
 
-// Sample data - remove this when using real API data
-const sampleData = ref<any>(null)
-
 // Chart options for reduction path
 const reductionPathOptions = {
   responsive: true,
@@ -196,24 +193,7 @@ const costsOptions = {
   }
 }
 
-// Load sample data - this will be removed when using real API data
-onMounted(async () => {
-  try {
-    // Load sample data for testing if no props data is available
-    if (!props.emissionData) {
-      const response = await fetch('/src/sample-retrofit-analysis-response.json')
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      const data = await response.json()
-      sampleData.value = data.data.emission_results
-      console.log('📊 Loaded sample emission data, scenario_activated:', sampleData.value?.scenario_activated)
-    }
-  } catch (error) {
-    console.error('Error in Dekarbonisierung component:', error)
-    sampleData.value = false // Set to false to indicate error
-  }
-})
+// No longer loading sample data - using real API response data
 
 // Debug watchers - reduced logging
 watch(() => props.emissionData, (newData, oldData) => {
@@ -229,8 +209,8 @@ watch(useScenario, (newValue) => {
 
 // Computed properties for data processing
 const emissionResults = computed(() => {
-  // Always prioritize sample data if available, since props might be unreliable
-  const data = sampleData.value || props.emissionData || null
+  // Use the real API response data from props
+  const data = props.emissionData || null
   
   // Add some stability checking
   if (data && typeof data === 'object') {

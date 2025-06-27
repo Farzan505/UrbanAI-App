@@ -19,9 +19,10 @@ import { toast } from 'vue-sonner'
 // Register Chart.js components
 ChartJS.register(Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale, PointElement, LineElement)
 
-// Props
+// Props interface for receiving API response data
 interface Props {
   lcaLccResults?: any
+  summaryData?: any
   isLoading?: boolean
   buildingData?: any
   geometryData?: any
@@ -33,6 +34,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   lcaLccResults: null,
+  summaryData: null,
   isLoading: false,
   buildingData: null,
   geometryData: null,
@@ -41,10 +43,6 @@ const props = withDefaults(defineProps<Props>(), {
   selectedCo2PathScenario: 'KSG',
   selectedCo2CostScenario: '0% reine Zeitpräferenzrate'
 })
-
-// Load mock data from the sample JSON file
-const mockLcaLccResults = ref<any>(null)
-const mockSummaryData = ref<any>(null)
 
 // Construction selection state
 const isConstructionSheetOpen = ref(false)
@@ -67,28 +65,13 @@ const {
   analyzeWithConstructions: performConstructionAnalysis
 } = useRetrofitAnalysis()
 
-onMounted(async () => {
-  try {
-    // Load the sample data from the JSON file
-    const response = await fetch('/src/sample-retrofit-analysis-response.json')
-    const sampleData = await response.json()
-    mockLcaLccResults.value = sampleData.data.lca_lcc_results
-    mockSummaryData.value = sampleData.data.summary
-  } catch (error) {
-    console.error('Error loading sample LCA/LCC data:', error)
-    // Fallback to null if loading fails
-    mockLcaLccResults.value = null
-    mockSummaryData.value = null
-  }
-})
-
-// Use real data if available, otherwise use loaded mock data
+// Use real data from API response
 const effectiveLcaLccResults = computed(() => {
-  return props.lcaLccResults || mockLcaLccResults.value
+  return props.lcaLccResults
 })
 
 const effectiveSummaryData = computed(() => {
-  return mockSummaryData.value // For now, only use mock data since we don't have real summary data
+  return props.summaryData
 })
 
 // Reactive state
@@ -889,13 +872,8 @@ const analyzeWithConstructions = async () => {
       props.selectedCo2CostScenario || '0% reine Zeitpräferenzrate'
     )
     
-    // Update the LCA/LCC results with the new data
-    if (data?.data?.lca_lcc_results) {
-      mockLcaLccResults.value = data.data.lca_lcc_results
-    }
-    if (data?.data?.summary) {
-      mockSummaryData.value = data.data.summary
-    }
+    // Note: The new data will be passed via props from the parent component
+    // after the analysis is complete
 
     isConstructionSheetOpen.value = false
 
