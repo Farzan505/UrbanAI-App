@@ -26,6 +26,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 // Load mock data from the sample JSON file
 const mockLcaLccResults = ref<any>(null)
+const mockSummaryData = ref<any>(null)
 
 onMounted(async () => {
   try {
@@ -33,10 +34,12 @@ onMounted(async () => {
     const response = await fetch('/src/sample-retrofit-analysis-response.json')
     const sampleData = await response.json()
     mockLcaLccResults.value = sampleData.data.lca_lcc_results
+    mockSummaryData.value = sampleData.data.summary
   } catch (error) {
     console.error('Error loading sample LCA/LCC data:', error)
     // Fallback to null if loading fails
     mockLcaLccResults.value = null
+    mockSummaryData.value = null
   }
 })
 
@@ -45,8 +48,12 @@ const effectiveLcaLccResults = computed(() => {
   return props.lcaLccResults || mockLcaLccResults.value
 })
 
+const effectiveSummaryData = computed(() => {
+  return mockSummaryData.value // For now, only use mock data since we don't have real summary data
+})
+
 // Reactive state
-const activeTab = ref('lca') // 'lca' or 'lcc'
+const activeTab = ref('investments') // 'investments', 'lca' or 'lcc'
 const viewMode = ref('building') // 'building', 'component', or 'system'
 const selectedComponent = ref('facade') // 'facade', 'roof', 'base', 'window', 'hvac'
 const selectedIndicator = ref('gwptotal_a2') // for LCA
@@ -96,8 +103,8 @@ const availableComponents = computed(() => {
 // Available LCA indicators
 const lcaIndicators = [
   { key: 'gwptotal_a2', label: 'Treibhauspotential (GWP)', unit: 'kg CO₂ eq' },
-  { key: 'pert', label: 'Primärenergie erneuerbar (PERT)', unit: 'MJ' },
-  { key: 'penrt', label: 'Primärenergie nicht-erneuerbar (PENRT)', unit: 'MJ' }
+  { key: 'pert', label: 'Primärenergie erneuerbar (PERT)', unit: 'kWh' },
+  { key: 'penrt', label: 'Primärenergie nicht-erneuerbar (PENRT)', unit: 'kWh' }
 ]
 
 // Helper functions
@@ -143,71 +150,106 @@ function formatCurrency(value: number | null | undefined): string {
 
 // Computed data for building-level overview
 const buildingLevelData = computed(() => {
-  const results = effectiveLcaLccResults.value
-  if (!results) return null
+  const summaryData = effectiveSummaryData.value
+  if (!summaryData) return null
 
-  // Exclude HVAC from building components as it's handled separately
-  const components = Object.keys(results).filter(key => key !== 'hvac')
+  // Get investment costs and LCA impacts from summary
+  const investmentCosts = summaryData.investment_costs || {}
+  const lcaImpacts = summaryData.lca_impacts || {}
+  const lifecycleCosts = summaryData.lifecycle_costs || {}
+  const ngfArea = summaryData.building_info?.ngf_area_sqm || 0
+
+  // Building components (excluding hvac)
+  const components = ['facade', 'roof', 'base', 'window']
   let totalCost = 0
   let totalGWP = 0
   let totalPERT = 0
   let totalPENRT = 0
-  let totalArea = 0
 
   const componentData = components.map(component => {
-    const data = results[component]
-    
-    // Extract costs from summary
-    const totalCostValue = data.summary?.total_cost_euro || 0
-    const costPerM2Value = data.summary?.cost_per_m2_euro || 0
-    const area = data.summary?.area_m2 || 0
+    // Investment costs
+    const investmentData = investmentCosts[component] || {}
+    const totalCostValue = investmentData.total_euro || 0
+    const costPerM2Value = investmentData.per_sqm_ngf_euro || 0
+    const area = investmentData.area_sqm || 0
     totalCost += totalCostValue
-    totalArea += area
 
-    // Calculate LCA values from lca_by_material data
-    const lcaData = data.lca_by_material || []
-    let gwpTotal = 0, gwpPerM2 = 0
-    let pertTotal = 0, pertPerM2 = 0
-    let penrtTotal = 0, penrtPerM2 = 0
+    // LCA impacts
+    const lcaData = lcaImpacts[component] || {}
+    const gwpData = lcaData.gwptotal_a2 || {}
+    const pertData = lcaData.pert || {}
+    const penrtData = lcaData.penrt || {}
 
-    lcaData.forEach((item: any) => {
-      if (item.indicator === 'gwptotal_a2') {
-        gwpTotal += item.total_value || 0
-        gwpPerM2 += item.scaled_value_dynamic || 0
-      } else if (item.indicator === 'pert') {
-        pertTotal += item.total_value || 0
-        pertPerM2 += item.scaled_value_dynamic || 0
-      } else if (item.indicator === 'penrt') {
-        penrtTotal += item.total_value || 0
-        penrtPerM2 += item.scaled_value_dynamic || 0
-      }
-    })
+    const gwpTotal = gwpData.total || 0
+    const gwpPerM2 = gwpData.per_sqm_ngf || 0
+    const pertTotal = pertData.total || 0
+    const pertPerM2 = pertData.per_sqm_ngf || 0
+    const penrtTotal = penrtData.total || 0
+    const penrtPerM2 = penrtData.per_sqm_ngf || 0
 
     totalGWP += gwpTotal
-    totalPERT += pertTotal
-    totalPENRT += penrtTotal
+    totalPERT += (pertTotal * 0.277778) // Convert MJ to kWh
+    totalPENRT += (penrtTotal * 0.277778) // Convert MJ to kWh
 
     return {
       name: getComponentLabel(component),
       component,
       cost: showPerM2.value ? costPerM2Value : totalCostValue,
+      gwptotal_a2: showPerM2.value ? gwpPerM2 : gwpTotal,
       gwp: showPerM2.value ? gwpPerM2 : gwpTotal,
-      pert: showPerM2.value ? pertPerM2 : pertTotal,
-      penrt: showPerM2.value ? penrtPerM2 : penrtTotal,
+      pert: showPerM2.value ? (pertPerM2 * 0.277778) : (pertTotal * 0.277778),
+      penrt: showPerM2.value ? (penrtPerM2 * 0.277778) : (penrtTotal * 0.277778),
       area: area,
-      uValueOld: data.summary?.u_value_old || 0,
-      uValueNew: data.summary?.u_value_new || 0
+      uValueOld: 0, // Not available in summary data
+      uValueNew: 0  // Not available in summary data
     }
+  })
+
+  // Add HVAC data
+  const hvacInvestment = investmentCosts.hvac || {}
+  const hvacLca = lcaImpacts.hvac || {}
+  const hvacCost = hvacInvestment.total_euro || 0
+  const hvacCostPerM2 = hvacInvestment.per_sqm_ngf_euro || 0
+  const hvacPower = hvacInvestment.power_kw || 0
+
+  const hvacGwpData = hvacLca.gwptotal_a2 || {}
+  const hvacPertData = hvacLca.pert || {}
+  const hvacPenrtData = hvacLca.penrt || {}
+
+  const hvacGwp = hvacGwpData.total || 0
+  const hvacGwpPerM2 = hvacGwpData.per_sqm_ngf || 0
+  const hvacPert = hvacPertData.total || 0
+  const hvacPertPerM2 = hvacPertData.per_sqm_ngf || 0
+  const hvacPenrt = hvacPenrtData.total || 0
+  const hvacPenrtPerM2 = hvacPenrtData.per_sqm_ngf || 0
+
+  totalCost += hvacCost
+  totalGWP += hvacGwp
+  totalPERT += (hvacPert * 0.277778) // Convert MJ to kWh
+  totalPENRT += (hvacPenrt * 0.277778) // Convert MJ to kWh
+
+  // Add HVAC to components array
+  componentData.push({
+    name: getComponentLabel('hvac'),
+    component: 'hvac',
+    cost: showPerM2.value ? hvacCostPerM2 : hvacCost,
+    gwptotal_a2: showPerM2.value ? hvacGwpPerM2 : hvacGwp,
+    gwp: showPerM2.value ? hvacGwpPerM2 : hvacGwp,
+    pert: showPerM2.value ? (hvacPertPerM2 * 0.277778) : (hvacPert * 0.277778), // Convert MJ to kWh
+    penrt: showPerM2.value ? (hvacPenrtPerM2 * 0.277778) : (hvacPenrt * 0.277778), // Convert MJ to kWh
+    area: 0, // HVAC doesn't have area
+    uValueOld: 0,
+    uValueNew: 0
   })
 
   return {
     components: componentData,
     totals: {
-      cost: showPerM2.value && totalArea > 0 ? totalCost / totalArea : totalCost,
-      gwp: showPerM2.value && totalArea > 0 ? totalGWP / totalArea : totalGWP,
-      pert: showPerM2.value && totalArea > 0 ? totalPERT / totalArea : totalPERT,
-      penrt: showPerM2.value && totalArea > 0 ? totalPENRT / totalArea : totalPENRT,
-      area: totalArea
+      cost: showPerM2.value && ngfArea > 0 ? totalCost / ngfArea : totalCost,
+      gwp: showPerM2.value && ngfArea > 0 ? totalGWP / ngfArea : totalGWP,
+      pert: showPerM2.value && ngfArea > 0 ? totalPERT / ngfArea : totalPERT,
+      penrt: showPerM2.value && ngfArea > 0 ? totalPENRT / ngfArea : totalPENRT,
+      area: ngfArea
     }
   }
 })
@@ -442,7 +484,18 @@ const buildingComparisonChartData = computed(() => {
   const labels = components.map(c => c.name)
   const unit = showPerM2.value ? '/m²' : ''
   
-  if (activeTab.value === 'lcc') {
+  if (activeTab.value === 'investments') {
+    return {
+      labels,
+      datasets: [{
+        label: `Investitionskosten (€${unit})`,
+        data: components.map(c => c.cost),
+        backgroundColor: '#F59E0B',
+        borderColor: '#D97706',
+        borderWidth: 1
+      }]
+    }
+  } else if (activeTab.value === 'lcc') {
     return {
       labels,
       datasets: [{
@@ -453,7 +506,7 @@ const buildingComparisonChartData = computed(() => {
         borderWidth: 1
       }]
     }
-  } else {
+  } else if (activeTab.value === 'lca') {
     const selectedLcaData = components.map(c => (c as any)[selectedIndicator.value] || 0)
     const indicatorInfo = lcaIndicators.find(i => i.key === selectedIndicator.value)
     
@@ -468,6 +521,8 @@ const buildingComparisonChartData = computed(() => {
       }]
     }
   }
+
+  return null
 })
 
 // Chart data for year-based stacked materials (LCC)
@@ -737,11 +792,12 @@ const chartOptions = computed(() => ({
       callbacks: {
         label: function(context: any) {
           const unit = showPerM2.value ? '/m²' : ''
-          if (activeTab.value === 'lcc') {
+          if (activeTab.value === 'investments' || activeTab.value === 'lcc') {
             return `${context.dataset.label}: ${formatCurrency(context.parsed.y)}${unit}`
-          } else {
+          } else if (activeTab.value === 'lca') {
             return `${context.dataset.label}: ${formatNumber(context.parsed.y)}${unit}`
           }
+          return `${context.dataset.label}: ${formatNumber(context.parsed.y)}${unit}`
         }
       }
     }
@@ -791,7 +847,11 @@ const exportData = () => {
           <div class="space-y-2">
             <Label>Analysetyp</Label>
             <Tabs v-model="activeTab" class="w-full">
-              <TabsList class="grid w-full grid-cols-2">
+              <TabsList class="grid w-full grid-cols-3">
+                <TabsTrigger value="investments" class="flex items-center space-x-2">
+                  <Euro class="h-4 w-4" />
+                  <span>Investitionen</span>
+                </TabsTrigger>
                 <TabsTrigger value="lca" class="flex items-center space-x-2">
                   <Leaf class="h-4 w-4" />
                   <span>LCA</span>
@@ -890,11 +950,26 @@ const exportData = () => {
     <div v-else-if="viewMode === 'building' && buildingLevelData" class="space-y-6">
       <!-- Summary Cards -->
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <!-- Total Cost Card -->
+        <!-- Investment Cost Card -->
+        <Card v-if="activeTab === 'investments'">
+          <CardHeader class="pb-2">
+            <CardTitle class="text-sm font-medium">
+              {{ showPerM2 ? 'Investitionskosten pro m²' : 'Gesamte Investitionskosten' }}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div class="text-2xl font-bold">
+              {{ formatCurrency(buildingLevelData.totals.cost) }}{{ showPerM2 ? '/m²' : '' }}
+            </div>
+            <p class="text-xs text-muted-foreground">Investitionskosten</p>
+          </CardContent>
+        </Card>
+
+        <!-- LCC Cost Card -->
         <Card v-if="activeTab === 'lcc'">
           <CardHeader class="pb-2">
             <CardTitle class="text-sm font-medium">
-              {{ showPerM2 ? 'Kosten pro m²' : 'Gesamtkosten' }}
+              {{ showPerM2 ? 'LCC-Kosten pro m²' : 'Gesamte LCC-Kosten' }}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -908,14 +983,14 @@ const exportData = () => {
         <!-- GWP Card -->
         <Card v-if="activeTab === 'lca'">
           <CardHeader class="pb-2">
-            <CardTitle class="text-sm font-medium">Treibhauspotential</CardTitle>
+            <CardTitle class="text-sm font-medium">Treibhauspotential (GWP)</CardTitle>
           </CardHeader>
           <CardContent>
             <div class="text-2xl font-bold">
-              {{ formatNumber(buildingLevelData.totals.gwp / 1000, 1) }}
+              {{ showPerM2 ? formatNumber(buildingLevelData.totals.gwp, 1) : formatNumber(buildingLevelData.totals.gwp / 1000, 1) }}
             </div>
             <p class="text-xs text-muted-foreground">
-              t CO₂ eq{{ showPerM2 ? '/m²' : '' }}
+              {{ showPerM2 ? 'kg CO₂-eq/m²' : 't CO₂-eq' }}
             </p>
           </CardContent>
         </Card>
@@ -923,14 +998,14 @@ const exportData = () => {
         <!-- PERT Card -->
         <Card v-if="activeTab === 'lca'">
           <CardHeader class="pb-2">
-            <CardTitle class="text-sm font-medium">Primärenergie erneuerbar</CardTitle>
+            <CardTitle class="text-sm font-medium">Primärenergie erneuerbar (PERT)</CardTitle>
           </CardHeader>
           <CardContent>
             <div class="text-2xl font-bold">
-              {{ formatNumber(buildingLevelData.totals.pert / 1000000, 1) }}
+              {{ showPerM2 ? formatNumber(buildingLevelData.totals.pert, 1) : formatNumber(buildingLevelData.totals.pert / 1000, 1) }}
             </div>
             <p class="text-xs text-muted-foreground">
-              GJ{{ showPerM2 ? '/m²' : '' }}
+              {{ showPerM2 ? 'kWh/m²' : 'MWh' }}
             </p>
           </CardContent>
         </Card>
@@ -938,14 +1013,14 @@ const exportData = () => {
         <!-- PENRT Card -->
         <Card v-if="activeTab === 'lca'">
           <CardHeader class="pb-2">
-            <CardTitle class="text-sm font-medium">Primärenergie nicht-erneuerbar</CardTitle>
+            <CardTitle class="text-sm font-medium">Primärenergie nicht-erneuerbar (PENRT)</CardTitle>
           </CardHeader>
           <CardContent>
             <div class="text-2xl font-bold">
-              {{ formatNumber(buildingLevelData.totals.penrt / 1000000, 1) }}
+              {{ showPerM2 ? formatNumber(buildingLevelData.totals.penrt, 1) : formatNumber(buildingLevelData.totals.penrt / 1000, 1) }}
             </div>
             <p class="text-xs text-muted-foreground">
-              GJ{{ showPerM2 ? '/m²' : '' }}
+              {{ showPerM2 ? 'kWh/m²' : 'MWh' }}
             </p>
           </CardContent>
         </Card>
@@ -956,56 +1031,19 @@ const exportData = () => {
         <CardHeader>
           <CardTitle>Vergleich nach Bauteilen</CardTitle>
           <CardDescription>
-            {{ activeTab === 'lca' ? 'Umweltauswirkungen' : 'Lebenszykluskosten' }} aufgeschlüsselt nach Bauteilen
+            <span v-if="activeTab === 'investments'">Investitionskosten aufgeschlüsselt nach Bauteilen</span>
+            <span v-else-if="activeTab === 'lca'">Umweltauswirkungen aufgeschlüsselt nach Bauteilen</span>
+            <span v-else-if="activeTab === 'lcc'">Lebenszykluskosten aufgeschlüsselt nach Bauteilen</span>
             {{ showPerM2 ? '(pro m²)' : '(Gesamtwerte)' }}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div class="h-80">              <Bar 
-                v-if="buildingComparisonChartData"
-                :data="buildingComparisonChartData" 
-                :options="chartOptions"
-              />
-          </div>
-        </CardContent>
-      </Card>
-
-      <!-- Components Details Table -->
-      <Card>
-        <CardHeader>
-          <CardTitle>Detailübersicht Bauteile</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead>
-                <tr class="border-b">
-                  <th class="text-left p-2">Bauteil</th>
-                  <th class="text-right p-2">Fläche (m²)</th>
-                  <th class="text-right p-2" v-if="activeTab === 'lcc'">
-                    {{ showPerM2 ? 'Kosten (€/m²)' : 'Kosten (€)' }}
-                  </th>
-                  <th class="text-right p-2" v-if="activeTab === 'lca'">
-                    {{ lcaIndicators.find(i => i.key === selectedIndicator)?.label }}
-                    {{ showPerM2 ? ' (pro m²)' : '' }}
-                  </th>
-                  <th class="text-right p-2">U-Wert alt</th>
-                  <th class="text-right p-2">U-Wert neu</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="component in buildingLevelData.components" :key="component.component" class="border-b">
-                  <td class="p-2 font-medium">{{ component.name }}</td>
-                  <td class="text-right p-2">{{ formatNumber(component.area, 1) }}</td>
-                  <td class="text-right p-2" v-if="activeTab === 'lcc'">{{ formatCurrency(component.cost) }}</td>
-                  <td class="text-right p-2" v-if="activeTab === 'lca'">
-                    {{ formatNumber(component[selectedIndicator as keyof typeof component] as number) }}
-                  </td>
-                  <td class="text-right p-2">{{ formatNumber(component.uValueOld, 3) }}</td>
-                  <td class="text-right p-2">{{ formatNumber(component.uValueNew, 3) }}</td>
-                </tr>
-              </tbody>
-            </table>
+          <div class="h-80">
+            <Bar 
+              v-if="buildingComparisonChartData"
+              :data="buildingComparisonChartData" 
+              :options="chartOptions"
+            />
           </div>
         </CardContent>
       </Card>
