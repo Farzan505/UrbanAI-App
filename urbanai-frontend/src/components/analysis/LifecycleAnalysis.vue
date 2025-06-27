@@ -6,9 +6,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger, SheetFooter } from '@/components/ui/sheet'
+import { Separator } from '@/components/ui/separator'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Bar } from 'vue-chartjs'
 import { Chart as ChartJS, Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale, PointElement, LineElement } from 'chart.js'
-import { Building, Layers, Euro, Leaf, Download } from 'lucide-vue-next'
+import { Building, Layers, Euro, Leaf, Download, Settings } from 'lucide-vue-next'
+import { useConstructionData } from '@/composables/useConstructionData'
+import { toast } from 'vue-sonner'
 
 // Register Chart.js components
 ChartJS.register(Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale, PointElement, LineElement)
@@ -17,16 +22,44 @@ ChartJS.register(Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale,
 interface Props {
   lcaLccResults?: any
   isLoading?: boolean
+  buildingData?: any
+  geometryData?: any
+  co2PathScenarios?: string[]
+  co2CostScenarios?: string[]
+  selectedCo2PathScenario?: string
+  selectedCo2CostScenario?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
   lcaLccResults: null,
-  isLoading: false
+  isLoading: false,
+  buildingData: null,
+  geometryData: null,
+  co2PathScenarios: () => [],
+  co2CostScenarios: () => [],
+  selectedCo2PathScenario: 'KSG',
+  selectedCo2CostScenario: '0% reine Zeitpräferenzrate'
 })
 
 // Load mock data from the sample JSON file
 const mockLcaLccResults = ref<any>(null)
 const mockSummaryData = ref<any>(null)
+
+// Construction selection state
+const isConstructionSheetOpen = ref(false)
+const isAnalyzingWithConstructions = ref(false)
+const constructionAnalysisError = ref('')
+
+// Use construction data composable
+const {
+  isLoading: isLoadingConstructions,
+  error: constructionError,
+  constructionSelections,
+  fetchAllConstructionTypes,
+  updateConstructionSelection,
+  resetSelections,
+  getConstructionOptions
+} = useConstructionData()
 
 onMounted(async () => {
   try {
@@ -819,6 +852,115 @@ const exportData = () => {
   // Implementation for data export
   console.log('Exporting lifecycle analysis data...')
 }
+
+// Construction selection functions
+const openConstructionSheet = async () => {
+  isConstructionSheetOpen.value = true
+  try {
+    await fetchAllConstructionTypes()
+  } catch (err) {
+    console.error('Error fetching construction types:', err)
+    toast.error('Fehler beim Laden der Konstruktionstypen')
+  }
+}
+
+const analyzeWithConstructions = async () => {
+  if (!props.buildingData || !props.geometryData) {
+    toast.error('Fehlende Gebäudedaten für die Analyse')
+    return
+  }
+
+  try {
+    isAnalyzingWithConstructions.value = true
+    constructionAnalysisError.value = ''
+
+    const assumptions = props.buildingData.buildings_assumptions
+    const gebplz = assumptions.gebid?.split(' ')[0] || ''
+    const gmlIds = props.buildingData.gmlid_gebid_mapping.map((mapping: any) => mapping.gmlid)
+    
+    // Get building category and construction year
+    const buildingCategory = assumptions?.enob_category || 'Wohngebäude'
+    const constructionYear = assumptions?.epl ? parseInt(assumptions.epl) : 1950
+
+    const payload = {
+      building_id: assumptions.gebid,
+      gebplz: gebplz,
+      building_category: buildingCategory,
+      construction_year: constructionYear,
+      system_type: 'Öl/Gas',
+      window_construction: constructionSelections.window_construction,
+      wall_construction: constructionSelections.wall_construction,
+      roof_construction: constructionSelections.roof_construction,
+      base_construction: constructionSelections.base_construction,
+      co2_reduction_scenario: props.selectedCo2PathScenario,
+      co2_cost_scenario: props.selectedCo2CostScenario,
+      gmlid_list: gmlIds,
+      geometry_data: props.geometryData.results || props.geometryData,
+      dynamic_lca: constructionSelections.dynamic_lca
+    }
+
+    console.log('🏗️ Sending construction analysis payload:', payload)
+
+    const response = await fetch('http://localhost:8080/api/energy/analyze-retrofit', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload)
+    })
+
+    if (!response.ok) {
+      let errorDetail = ''
+      try {
+        const errorData = await response.json()
+        console.error('❌ Construction analysis error response:', errorData)
+        
+        if (Array.isArray(errorData.detail)) {
+          errorDetail = errorData.detail.map((err: any) => 
+            `${err.loc.join('.')}: ${err.msg} (${err.type})`
+          ).join('\n')
+        } else {
+          errorDetail = errorData.detail || JSON.stringify(errorData)
+        }
+      } catch (e) {
+        errorDetail = `HTTP error! status: ${response.status}`
+      }
+      throw new Error(errorDetail)
+    }
+
+    const data = await response.json()
+    console.log('✅ Construction analysis response:', data)
+    
+    // Update the LCA/LCC results with the new data
+    if (data.data?.lca_lcc_results) {
+      mockLcaLccResults.value = data.data.lca_lcc_results
+    }
+    if (data.data?.summary) {
+      mockSummaryData.value = data.data.summary
+    }
+
+    isConstructionSheetOpen.value = false
+    toast.success('Konstruktionsanalyse erfolgreich', {
+      description: 'Die Lebenszyklusanalyse wurde mit den ausgewählten Konstruktionen durchgeführt.'
+    })
+
+  } catch (err) {
+    console.error('❌ Construction analysis error:', err)
+    constructionAnalysisError.value = err instanceof Error ? err.message : 'Unbekannter Fehler'
+    toast.error('Konstruktionsanalyse fehlgeschlagen', {
+      description: constructionAnalysisError.value
+    })
+  } finally {
+    isAnalyzingWithConstructions.value = false
+  }
+}
+
+const resetConstructionSelections = () => {
+  resetSelections()
+  toast.success('Auswahl zurückgesetzt', {
+    description: 'Die Konstruktionsauswahl wurde auf die Standardwerte zurückgesetzt.'
+  })
+}
 </script>
 
 <template>
@@ -833,6 +975,211 @@ const exportData = () => {
       </div>
       
       <div class="flex items-center space-x-4">
+        <!-- Construction Selection Button -->
+        <Sheet :open="isConstructionSheetOpen" @update:open="isConstructionSheetOpen = $event">
+          <SheetTrigger as-child>
+            <Button variant="outline" size="sm" @click="openConstructionSheet">
+              <Settings class="h-4 w-4 mr-2" />
+              Konstruktionsauswahl
+            </Button>
+          </SheetTrigger>
+          
+          <SheetContent side="right" class="w-[600px] sm:w-[700px] flex flex-col">
+            <SheetHeader>
+              <SheetTitle>Konstruktionsauswahl für LCA</SheetTitle>
+              <SheetDescription>
+                Wählen Sie spezifische Konstruktionstypen für eine detaillierte Lebenszyklusanalyse aus.
+              </SheetDescription>
+            </SheetHeader>
+            
+            <!-- Scrollable Content Area -->
+            <div class="flex-1 overflow-y-auto py-4">
+              <div class="space-y-6 px-4">
+                <!-- Error Message -->
+                <div v-if="constructionError" class="bg-red-50 border border-red-200 rounded-md p-3">
+                  <p class="text-sm text-red-600">{{ constructionError }}</p>
+                </div>
+                
+                <!-- Loading State -->
+                <div v-if="isLoadingConstructions" class="space-y-4">
+                  <div v-for="i in 4" :key="i" class="space-y-2">
+                    <Skeleton class="h-4 w-24" />
+                    <Skeleton class="h-10 w-full" />
+                  </div>
+                </div>
+                
+                <!-- Construction Selection Forms -->
+                <div v-else class="space-y-6">
+                  <!-- Fenster (Windows) -->
+                  <div class="space-y-3">
+                    <div>
+                      <h3 class="text-lg font-medium">Fenster</h3>
+                      <p class="text-sm text-muted-foreground">Auswahl der Fensterkonstruktion</p>
+                    </div>
+                    <Select 
+                      :model-value="constructionSelections.window_construction"
+                      @update:model-value="(value) => updateConstructionSelection('Fenster', value as string)"
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Wählen Sie eine Fensterkonstruktion..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem
+                          v-for="construction in getConstructionOptions('Fenster')"
+                          :key="construction.construction_number"
+                          :value="construction.construction_number"
+                        >
+                          {{ construction.construction_name }}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <Separator />
+                  
+                  <!-- Außenwand (Walls) -->
+                  <div class="space-y-3">
+                    <div>
+                      <h3 class="text-lg font-medium">Außenwand</h3>
+                      <p class="text-sm text-muted-foreground">Auswahl der Außenwandkonstruktion</p>
+                    </div>
+                    <Select 
+                      :model-value="constructionSelections.wall_construction"
+                      @update:model-value="(value) => updateConstructionSelection('Außenwand', value as string)"
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Wählen Sie eine Außenwandkonstruktion..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem
+                          v-for="construction in getConstructionOptions('Außenwand')"
+                          :key="construction.construction_number"
+                          :value="construction.construction_number"
+                        >
+                          {{ construction.construction_name }}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <Separator />
+                  
+                  <!-- Dach (Roof) -->
+                  <div class="space-y-3">
+                    <div>
+                      <h3 class="text-lg font-medium">Dach</h3>
+                      <p class="text-sm text-muted-foreground">Auswahl der Dachkonstruktion</p>
+                    </div>
+                    <Select 
+                      :model-value="constructionSelections.roof_construction"
+                      @update:model-value="(value) => updateConstructionSelection('Dach', value as string)"
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Wählen Sie eine Dachkonstruktion..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem
+                          v-for="construction in getConstructionOptions('Dach')"
+                          :key="construction.construction_number"
+                          :value="construction.construction_number"
+                        >
+                          {{ construction.construction_name }}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <Separator />
+                  
+                  <!-- Boden (Base/Floor) -->
+                  <div class="space-y-3">
+                    <div>
+                      <h3 class="text-lg font-medium">Boden</h3>
+                      <p class="text-sm text-muted-foreground">Auswahl der Bodenkonstruktion</p>
+                    </div>
+                    <Select 
+                      :model-value="constructionSelections.base_construction"
+                      @update:model-value="(value) => updateConstructionSelection('Boden', value as string)"
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Wählen Sie eine Bodenkonstruktion..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem
+                          v-for="construction in getConstructionOptions('Boden')"
+                          :key="construction.construction_number"
+                          :value="construction.construction_number"
+                        >
+                          {{ construction.construction_name }}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <Separator />
+                  
+                  <!-- Dynamic LCA Option -->
+                  <div class="space-y-3">
+                    <div>
+                      <h3 class="text-lg font-medium">Erweiterte Optionen</h3>
+                      <p class="text-sm text-muted-foreground">Zusätzliche Einstellungen für die LCA</p>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                      <Switch 
+                        id="dynamic-lca"
+                        v-model="constructionSelections.dynamic_lca"
+                      />
+                      <Label for="dynamic-lca" class="text-sm">
+                        Dynamische LCA aktivieren
+                      </Label>
+                    </div>
+                    <p class="text-xs text-muted-foreground">
+                      Berücksichtigt zeitabhängige Faktoren in der Lebenszyklusanalyse
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <SheetFooter class="mt-4 border-t pt-4 px-4">
+              <div class="flex space-x-2 w-full">
+                <Button 
+                  variant="outline" 
+                  @click="resetConstructionSelections"
+                  class="flex-1"
+                >
+                  Zurücksetzen
+                </Button>
+                <Button 
+                  variant="outline" 
+                  @click="isConstructionSheetOpen = false"
+                  class="flex-1"
+                >
+                  Abbrechen
+                </Button>
+                <Button 
+                  @click="analyzeWithConstructions"
+                  :disabled="isAnalyzingWithConstructions"
+                  class="flex-1"
+                >
+                  <template v-if="isAnalyzingWithConstructions">
+                    <span class="animate-spin mr-2">⟳</span>
+                    Analysiere...
+                  </template>
+                  <template v-else>
+                    Analyse starten
+                  </template>
+                </Button>
+              </div>
+              
+              <!-- Error Message -->
+              <div v-if="constructionAnalysisError" class="mt-2 text-xs text-red-500">
+                {{ constructionAnalysisError }}
+              </div>
+            </SheetFooter>
+          </SheetContent>
+        </Sheet>
+        
         <!-- Export Button -->
         <Button variant="outline" size="sm" @click="exportData">
           <Download class="h-4 w-4 mr-2" />
