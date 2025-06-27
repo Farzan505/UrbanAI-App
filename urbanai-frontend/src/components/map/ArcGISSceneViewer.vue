@@ -72,13 +72,13 @@ const fixRingOrientation = (rings: number[][][]) => {
     if (index === 0) {
       // Exterior ring should be clockwise for ArcGIS
       if (!ringIsClockwise) {
-        console.log(`🔄 Reversing exterior ring to make it clockwise`)
+        
         return reverseRing(ring)
       }
     } else {
       // Interior rings (holes) should be counter-clockwise for ArcGIS
       if (ringIsClockwise) {
-        console.log(`🔄 Reversing interior ring ${index} to make it counter-clockwise`)
+
         return reverseRing(ring)
       }
     }
@@ -94,52 +94,31 @@ interface GeometryResponse {
 
 // Watch for changes in geometry data and process it automatically
 watch(geometryData, async (newGeometryData) => {
-  console.log('👀 Geometry data changed:', { hasData: !!newGeometryData })
-  console.log('View and map status:', { view: !!view, map: !!map })
-  
   if (newGeometryData && view && map) {
-    console.log('🚀 Triggering processGeometryData from watch...')
     await processGeometryData(newGeometryData)
-  } else {
-    console.log('⚠️ Not processing geometry:', {
-      hasData: !!newGeometryData,
-      hasView: !!view,
-      hasMap: !!map
-    })
   }
 }, { immediate: false })
 
 // Process geometry data and display in ArcGIS
 const processGeometryData = async (data: GeometryResponse) => {
-  console.log('🔄 Starting processGeometryData...')
-  
   if (!view || !map) {
     error.value = 'Map not initialized'
-    console.error('❌ Map or view not initialized:', { view: !!view, map: !!map })
     return
   }
 
   if (!view.ready) {
-    console.log('⏳ View not ready, waiting...')
     await view.when()
-    console.log('✅ View is now ready')
   }
 
   const { FeatureLayer } = esriModules
 
   try {
-    console.log('🧹 Clearing existing layers...')
     // Clear existing layers
     map.layers.removeAll()
-
-    console.log('Processing geometry data:', data)
-    console.log('Data keys:', Object.keys(data))
 
     // Check if data is wrapped in 'results' property
     let geometryData = data
     if (data.results) {
-      console.log('Found data in results property')
-      console.log('Results keys:', Object.keys(data.results))
       geometryData = data.results
     }
 
@@ -150,13 +129,11 @@ const processGeometryData = async (data: GeometryResponse) => {
     // Look for surfaces_adiabatic in the response structure
     if (geometryData.surfaces_adiabatic) {
       adiabaticData = geometryData.surfaces_adiabatic
-      console.log('Found surfaces_adiabatic directly')
     } else {
       // Check if it's nested in results or other structure
       for (const key in geometryData) {
         if (geometryData[key] && geometryData[key].surfaces_adiabatic) {
           adiabaticData = geometryData[key].surfaces_adiabatic
-          console.log('Found surfaces_adiabatic in key:', key)
           break
         }
       }
@@ -165,26 +142,20 @@ const processGeometryData = async (data: GeometryResponse) => {
     // Look for shading_surfaces in the response structure
     if (geometryData.shading_surfaces) {
       shadingData = geometryData.shading_surfaces
-      console.log('Found shading_surfaces directly')
     } else {
       // Check if it's nested in results or other structure
       for (const key in geometryData) {
         if (geometryData[key] && geometryData[key].shading_surfaces) {
           shadingData = geometryData[key].shading_surfaces
-          console.log('Found shading_surfaces in key:', key)
           break
         }
       }
     }
 
-    console.log('Final adiabatic data:', adiabaticData)
-    console.log('Final shading data:', shadingData)
-
     // If no data found, let's see what's available
     if (!adiabaticData && !shadingData) {
-      console.log('No expected data found. Available keys in geometryData:', Object.keys(geometryData))
       for (const key in geometryData) {
-        console.log(`Key: ${key}, Type: ${typeof geometryData[key]}, Value:`, geometryData[key])
+        // Silently check data structure
       }
     }
 
@@ -207,7 +178,6 @@ const processGeometryData = async (data: GeometryResponse) => {
 
     // Add shading surfaces (always visible)
     if (shadingData && shadingData.features && shadingData.features.length > 0) {
-      console.log('Processing shading surfaces...')
       const shadingFeatures = shadingData.features.map((feature: any, index: number) => ({
         geometry: {
           type: "polygon",
@@ -215,24 +185,11 @@ const processGeometryData = async (data: GeometryResponse) => {
             let rings = feature.geometry.coordinates
             if (feature.geometry.type === 'Polygon') {
               rings = feature.geometry.coordinates
-              console.log(`🔍 Polygon ${index} coordinates structure:`, {
-                type: feature.geometry.type,
-                coordinatesLength: feature.geometry.coordinates.length,
-                firstRingLength: feature.geometry.coordinates[0]?.length,
-                allRings: feature.geometry.coordinates.map((ring: any, ringIndex: number) => ({
-                  ringIndex,
-                  ringLength: ring.length,
-                  firstCoord: ring[0],
-                  lastCoord: ring[ring.length - 1]
-                }))
-              })
               if (rings.length > 1) {
-                console.log(`🕳️ Shading Polygon ${index} has ${rings.length - 1} interior ring(s) (holes)`)
-                console.log(`🕳️ Interior rings:`, rings.slice(1))
+                // Has interior rings (holes)
               }
             } else if (feature.geometry.type === 'MultiPolygon') {
               rings = feature.geometry.coordinates.flat()
-              console.log(`🔗 Shading MultiPolygon ${index} flattened to ${rings.length} rings`)
             }
             
             // Fix ring orientation for ArcGIS
@@ -291,61 +248,30 @@ const processGeometryData = async (data: GeometryResponse) => {
         })
 
         map.add(shadingLayer)
-        console.log('✅ Successfully added shading layer with', shadingFeatures.length, 'features')
       } catch (layerError) {
         console.error('❌ Error creating shading layer:', layerError)
       }
-    } else {
-      console.log('No shading data available')
     }
 
     // If we have a selected property, visualize by that property
     if (selectedProperty.value && adiabaticData) {
-      console.log('Visualizing by property:', selectedProperty.value)
       visualizeByProperty(selectedProperty.value)
     } else if (adiabaticData && adiabaticData.features && adiabaticData.features.length > 0) {
-      console.log('Processing adiabatic surfaces...')
       // Otherwise show default red adiabatic surfaces
-      const adiabaticFeatures = adiabaticData.features.map((feature: any, index: number) => {
-        console.log('Processing adiabatic feature:', index, feature.geometry)
-        
+      const adiabaticFeatures = adiabaticData.features.map((feature: any, index: number) => {        
         // Handle GeoJSON polygon coordinates properly
         let rings = feature.geometry.coordinates
         if (feature.geometry.type === 'Polygon') {
           rings = feature.geometry.coordinates
-          console.log(`🔍 Property Polygon ${index} coordinates structure:`, {
-            type: feature.geometry.type,
-            coordinatesLength: feature.geometry.coordinates.length,
-            firstRingLength: feature.geometry.coordinates[0]?.length,
-            allRings: feature.geometry.coordinates.map((ring: any, ringIndex: number) => ({
-              ringIndex,
-              ringLength: ring.length,
-              firstCoord: ring[0],
-              lastCoord: ring[ring.length - 1]
-            }))
-          })
           if (rings.length > 1) {
-            console.log(`🕳️ Property Adiabatic Polygon ${index} has ${rings.length - 1} interior ring(s) (holes)`)
-            console.log(`🕳️ Interior rings:`, rings.slice(1))
+            // Has interior rings (holes)
           }
         } else if (feature.geometry.type === 'MultiPolygon') {
           rings = feature.geometry.coordinates.flat()
-          console.log(`🔗 Property Adiabatic MultiPolygon ${index} flattened to ${rings.length} rings`)
         }
         
         // Fix ring orientation for ArcGIS
         rings = fixRingOrientation(rings)
-        
-        console.log(`📐 Final rings for adiabatic feature ${index}:`, {
-          ringsCount: rings.length,
-          rings: rings.map((ring: any, ringIndex: number) => ({
-            ringIndex,
-            pointCount: ring.length,
-            isHole: ringIndex > 0,
-            firstPoint: ring[0],
-            lastPoint: ring[ring.length - 1]
-          }))
-        })
         
         return {
           geometry: {
@@ -403,22 +329,13 @@ const processGeometryData = async (data: GeometryResponse) => {
         })
 
         map.add(adiabaticLayer)
-        console.log('✅ Successfully added adiabatic layer with', adiabaticFeatures.length, 'features')
       } catch (layerError) {
         console.error('❌ Error creating adiabatic layer:', layerError)
       }
-    } else {
-      console.log('No adiabatic data available')
     }
 
     // Calculate extent and zoom to data
-    console.log('Attempting to zoom to data...')
-    try {
-      await zoomToData({ adiabaticData, shadingData })
-      console.log('✅ Successfully zoomed to data')
-    } catch (zoomError) {
-      console.error('❌ Error zooming to data:', zoomError)
-    }
+    await zoomToData({ adiabaticData, shadingData })
 
   } catch (err) {
     error.value = `Failed to process geometry data: ${err instanceof Error ? err.message : 'Unknown error'}`
@@ -499,11 +416,6 @@ const zoomToData = async (data: { adiabaticData: any, shadingData: any }) => {
     })
   }
 
-  console.log('Total coordinates found:', allCoordinates.length)
-  if (allCoordinates.length > 0) {
-    console.log('Sample coordinate:', allCoordinates[0])
-  }
-
   if (allCoordinates.length > 0) {
     const xCoords = allCoordinates.map(coords => coords[0])
     const yCoords = allCoordinates.map(coords => coords[1])
@@ -515,8 +427,6 @@ const zoomToData = async (data: { adiabaticData: any, shadingData: any }) => {
       ymax: Math.max(...yCoords),
       spatialReference: { wkid: 4326 }
     })
-
-    console.log('Calculated extent:', extent)
 
     // Calculate center point for better camera positioning
     const centerX = (extent.xmin + extent.xmax) / 2
@@ -544,16 +454,11 @@ const zoomToData = async (data: { adiabaticData: any, shadingData: any }) => {
       duration: 3000,
       easing: "ease-in-out"
     })
-
-    console.log('Zoomed to building extent')
-  } else {
-    console.warn('No coordinates found to zoom to')
   }
 }
 
 // Handle property selection change
 const onPropertyChange = () => {
-  console.log('Property changed to:', selectedProperty.value)
   if (selectedProperty.value && currentData) {
     visualizeByProperty(selectedProperty.value)
   }
@@ -579,24 +484,11 @@ const visualizeByProperty = (selectedProperty: string) => {
             let rings = feature.geometry.coordinates
             if (feature.geometry.type === 'Polygon') {
               rings = feature.geometry.coordinates
-              console.log(`🔍 Polygon ${index} coordinates structure:`, {
-                type: feature.geometry.type,
-                coordinatesLength: feature.geometry.coordinates.length,
-                firstRingLength: feature.geometry.coordinates[0]?.length,
-                allRings: feature.geometry.coordinates.map((ring: any, ringIndex: number) => ({
-                  ringIndex,
-                  ringLength: ring.length,
-                  firstCoord: ring[0],
-                  lastCoord: ring[ring.length - 1]
-                }))
-              })
               if (rings.length > 1) {
-                console.log(`🕳️ Shading Polygon ${index} has ${rings.length - 1} interior ring(s) (holes)`)
-                console.log(`🕳️ Interior rings:`, rings.slice(1))
+                // Has interior rings (holes)
               }
             } else if (feature.geometry.type === 'MultiPolygon') {
               rings = feature.geometry.coordinates.flat()
-              console.log(`🔗 Shading MultiPolygon ${index} flattened to ${rings.length} rings`)
             }
             
             // Fix ring orientation for ArcGIS
@@ -686,7 +578,6 @@ const visualizeByProperty = (selectedProperty: string) => {
 
       // Get unique values for the selected property
       const uniqueValues = [...new Set(features.map((f: any) => f.attributes.featureProp))].filter((val: any) => val != null)
-      console.log('Unique values for', selectedProperty, ':', uniqueValues)
 
       // Create a separate layer for each unique value
       const sublayers = uniqueValues.map((value, index) => {
@@ -737,7 +628,6 @@ const visualizeByProperty = (selectedProperty: string) => {
 
       // Add all sublayers to the map
       sublayers.forEach(layer => map.add(layer))
-      console.log('Added', sublayers.length, 'property-based layers')
     }
 
   } catch (err) {
@@ -749,8 +639,6 @@ const visualizeByProperty = (selectedProperty: string) => {
 // Initialize ArcGIS Map
 const initializeMap = async () => {
   try {
-    console.log('🗺️ Starting map initialization...')
-    
     const modules = await new Promise((resolve) => {
       (window as any).require([
         "esri/Map",
@@ -804,7 +692,6 @@ const initializeMap = async () => {
       basemap: "arcgis/topographic",
       ground: "world-elevation"
     })
-    console.log('✅ Map created')
 
     // Create scene view
     view = new SceneView({
@@ -825,11 +712,9 @@ const initializeMap = async () => {
         }
       }
     })
-    console.log('✅ SceneView created')
 
     // Wait for view to be ready
     await view.when()
-    console.log('✅ SceneView is ready')
 
     // Add widgets
     const legend = new Legend({ view })
@@ -877,8 +762,6 @@ const initializeMap = async () => {
       })
     })
 
-    console.log('✅ ArcGIS Map initialized successfully')
-
   } catch (err) {
     error.value = `Failed to initialize map: ${err instanceof Error ? err.message : 'Unknown error'}`
     console.error('❌ Map initialization error:', err)
@@ -923,18 +806,12 @@ const loadArcGISAPI = () => {
 // Component lifecycle
 onMounted(async () => {
   try {
-    console.log('🚀 Component mounted, initializing...')
     await loadArcGISAPI()
-    console.log('✅ ArcGIS API loaded')
     await initializeMap()
-    console.log('✅ Map initialized')
     
     // Auto-process geometry if data is available
     if (geometryData.value) {
-      console.log('🎯 Geometry data available on mount, processing...')
       await processGeometryData(geometryData.value)
-    } else {
-      console.log('ℹ️ No geometry data available on mount')
     }
   } catch (err) {
     error.value = `Initialization failed: ${err instanceof Error ? err.message : 'Unknown error'}`

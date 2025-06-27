@@ -72,13 +72,13 @@ const fixRingOrientation = (rings: number[][][]) => {
     if (index === 0) {
       // Exterior ring should be clockwise for ArcGIS
       if (!ringIsClockwise) {
-        console.log(`🔄 Reversing exterior ring to make it clockwise`)
+
         return reverseRing(ring)
       }
     } else {
       // Interior rings (holes) should be counter-clockwise for ArcGIS
       if (ringIsClockwise) {
-        console.log(`🔄 Reversing interior ring ${index} to make it counter-clockwise`)
+
         return reverseRing(ring)
       }
     }

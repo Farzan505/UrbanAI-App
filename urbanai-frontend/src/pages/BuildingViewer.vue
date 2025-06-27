@@ -154,6 +154,9 @@ interface BuildingDataResponse {
       ligbez: string
       gebzabt: string
       [key: string]: any
+      gebplz: string
+      mapped_system_type: string
+      construction_year: string
     }
     gmlid_gebid_mapping: Array<{
       gebid: string
@@ -262,18 +265,18 @@ const getBuildingCategory = (assumptions: any): string => {
 }
 
 // Parse construction year with proper validation
-const parseConstructionYear = (epl: string | number | null | undefined): number => {
-  if (!epl) return 1950 // Default fallback year
+const parseConstructionYear = (construction_year: string | number | null | undefined): string => {
+  if (!construction_year) return "1950" // Default fallback year
   
-  const year = typeof epl === 'string' ? parseInt(epl) : epl
+  const year = typeof construction_year === 'string' ? parseInt(construction_year) : construction_year
   
   // Validate year range (buildings should be between 1800 and current year)
   if (isNaN(year) || year < 1900 || year > new Date().getFullYear()) {
-    console.warn(`Invalid construction year: ${epl}, using default 1950`)
-    return 1950
+    console.warn(`Invalid construction year: ${construction_year}, using default 1950`)
+    return "1950"
   }
   
-  return year
+  return String(year)
 }
 
 // Search for building by GEBID
@@ -518,7 +521,7 @@ const fetchGeometry = async (gmlIds: string[]) => {
     }
     
     const actualBuildingCategory = getBuildingCategory(assumptions)
-    const actualConstructionYear = parseConstructionYear(assumptions?.epl)
+    const actualConstructionYear = parseConstructionYear(assumptions?.construction_year)
     
     // Add required parameters with actual building data
     params.append('building_category', actualBuildingCategory)
@@ -2344,7 +2347,14 @@ const isDataComplete = computed(() => {
           <!-- Lifecycle Analysis Tab Content -->
           <div v-else-if="activeAnalysisTab === 'lifecycle'">
             <LifecycleAnalysis 
-              :lca-lcc-data="retrofitAnalysisResult?.lca_lcc_results || {}"
+              :lca-lcc-results="retrofitAnalysisResult?.data?.lca_lcc_results || null"
+              :building-data="buildingData"
+              :geometry-data="geometryData"
+              :co2-path-scenarios="co2PathScenarios"
+              :co2-cost-scenarios="co2CostScenarios"
+              :selected-co2-path-scenario="selectedCo2PathScenario"
+              :selected-co2-cost-scenario="selectedCo2CostScenario"
+              :is-loading="isAnalyzingRetrofit"
             />
           </div>
           

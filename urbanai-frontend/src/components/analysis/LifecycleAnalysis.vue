@@ -13,6 +13,7 @@ import { Bar } from 'vue-chartjs'
 import { Chart as ChartJS, Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale, PointElement, LineElement } from 'chart.js'
 import { Building, Layers, Euro, Leaf, Download, Settings } from 'lucide-vue-next'
 import { useConstructionData } from '@/composables/useConstructionData'
+import { useRetrofitAnalysis } from '@/composables/useRetrofitAnalysis'
 import { toast } from 'vue-sonner'
 
 // Register Chart.js components
@@ -60,6 +61,11 @@ const {
   resetSelections,
   getConstructionOptions
 } = useConstructionData()
+
+// Use retrofit analysis composable
+const {
+  analyzeWithConstructions: performConstructionAnalysis
+} = useRetrofitAnalysis()
 
 onMounted(async () => {
   try {
@@ -874,82 +880,28 @@ const analyzeWithConstructions = async () => {
     isAnalyzingWithConstructions.value = true
     constructionAnalysisError.value = ''
 
-    const assumptions = props.buildingData.buildings_assumptions
-    const gebplz = assumptions.gebid?.split(' ')[0] || ''
-    const gmlIds = props.buildingData.gmlid_gebid_mapping.map((mapping: any) => mapping.gmlid)
-    
-    // Get building category and construction year
-    const buildingCategory = assumptions?.enob_category || 'Wohngebäude'
-    const constructionYear = assumptions?.epl ? parseInt(assumptions.epl) : 1950
-
-    const payload = {
-      building_id: assumptions.gebid,
-      gebplz: gebplz,
-      building_category: buildingCategory,
-      construction_year: constructionYear,
-      system_type: 'Öl/Gas',
-      window_construction: constructionSelections.window_construction,
-      wall_construction: constructionSelections.wall_construction,
-      roof_construction: constructionSelections.roof_construction,
-      base_construction: constructionSelections.base_construction,
-      co2_reduction_scenario: props.selectedCo2PathScenario,
-      co2_cost_scenario: props.selectedCo2CostScenario,
-      gmlid_list: gmlIds,
-      geometry_data: props.geometryData.results || props.geometryData,
-      dynamic_lca: constructionSelections.dynamic_lca
-    }
-
-    console.log('🏗️ Sending construction analysis payload:', payload)
-
-    const response = await fetch('http://localhost:8080/api/energy/analyze-retrofit', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload)
-    })
-
-    if (!response.ok) {
-      let errorDetail = ''
-      try {
-        const errorData = await response.json()
-        console.error('❌ Construction analysis error response:', errorData)
-        
-        if (Array.isArray(errorData.detail)) {
-          errorDetail = errorData.detail.map((err: any) => 
-            `${err.loc.join('.')}: ${err.msg} (${err.type})`
-          ).join('\n')
-        } else {
-          errorDetail = errorData.detail || JSON.stringify(errorData)
-        }
-      } catch (e) {
-        errorDetail = `HTTP error! status: ${response.status}`
-      }
-      throw new Error(errorDetail)
-    }
-
-    const data = await response.json()
-    console.log('✅ Construction analysis response:', data)
+    // Use the composable function
+    const data = await performConstructionAnalysis(
+      props.buildingData,
+      props.geometryData,
+      constructionSelections,
+      props.selectedCo2PathScenario || 'KSG',
+      props.selectedCo2CostScenario || '0% reine Zeitpräferenzrate'
+    )
     
     // Update the LCA/LCC results with the new data
-    if (data.data?.lca_lcc_results) {
+    if (data?.data?.lca_lcc_results) {
       mockLcaLccResults.value = data.data.lca_lcc_results
     }
-    if (data.data?.summary) {
+    if (data?.data?.summary) {
       mockSummaryData.value = data.data.summary
     }
 
     isConstructionSheetOpen.value = false
-    toast.success('Konstruktionsanalyse erfolgreich', {
-      description: 'Die Lebenszyklusanalyse wurde mit den ausgewählten Konstruktionen durchgeführt.'
-    })
 
   } catch (err) {
     console.error('❌ Construction analysis error:', err)
     constructionAnalysisError.value = err instanceof Error ? err.message : 'Unbekannter Fehler'
-    toast.error('Konstruktionsanalyse fehlgeschlagen', {
-      description: constructionAnalysisError.value
-    })
   } finally {
     isAnalyzingWithConstructions.value = false
   }
