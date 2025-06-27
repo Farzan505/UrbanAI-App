@@ -64,6 +64,11 @@ watch(viewMode, (newMode) => {
   const results = effectiveLcaLccResults.value
   if (!results) return
   
+  // Switch away from investments tab if not in building mode
+  if (newMode !== 'building' && activeTab.value === 'investments') {
+    activeTab.value = 'lca'
+  }
+  
   if (newMode === 'system' && results.hvac) {
     selectedComponent.value = 'hvac'
   } else if (newMode === 'component') {
@@ -847,11 +852,21 @@ const exportData = () => {
           <div class="space-y-2">
             <Label>Analysetyp</Label>
             <Tabs v-model="activeTab" class="w-full">
-              <TabsList class="grid w-full grid-cols-3">
-                <TabsTrigger value="investments" class="flex items-center space-x-2">
-                  <Euro class="h-4 w-4" />
-                  <span>Investitionen</span>
+              <TabsList v-if="viewMode === 'building'" class="grid w-full grid-cols-3">
+                <TabsTrigger value="investments" class="flex items-center justify-center space-x-1 text-xs">
+                  <Euro class="h-3 w-3" />
+                  <span>Invest.</span>
                 </TabsTrigger>
+                <TabsTrigger value="lca" class="flex items-center justify-center space-x-1 text-xs">
+                  <Leaf class="h-3 w-3" />
+                  <span>LCA</span>
+                </TabsTrigger>
+                <TabsTrigger value="lcc" class="flex items-center justify-center space-x-1 text-xs">
+                  <Euro class="h-3 w-3" />
+                  <span>LCC</span>
+                </TabsTrigger>
+              </TabsList>
+              <TabsList v-else class="grid w-full grid-cols-2">
                 <TabsTrigger value="lca" class="flex items-center space-x-2">
                   <Leaf class="h-4 w-4" />
                   <span>LCA</span>
@@ -1029,11 +1044,11 @@ const exportData = () => {
       <!-- Components Comparison Chart -->
       <Card>
         <CardHeader>
-          <CardTitle>Vergleich nach Bauteilen</CardTitle>
+          <CardTitle>Vergleich nach Bauteilen/Komponenten</CardTitle>
           <CardDescription>
-            <span v-if="activeTab === 'investments'">Investitionskosten aufgeschlüsselt nach Bauteilen</span>
-            <span v-else-if="activeTab === 'lca'">Umweltauswirkungen aufgeschlüsselt nach Bauteilen</span>
-            <span v-else-if="activeTab === 'lcc'">Lebenszykluskosten aufgeschlüsselt nach Bauteilen</span>
+            <span v-if="activeTab === 'investments'">Investitionskosten aufgeschlüsselt nach Bauteilen/Komponenten</span>
+            <span v-else-if="activeTab === 'lca'">Umweltauswirkungen aufgeschlüsselt nach Bauteilen/Komponenten</span>
+            <span v-else-if="activeTab === 'lcc'">Lebenszykluskosten aufgeschlüsselt nach Bauteilen/Komponenten</span>
             {{ showPerM2 ? '(pro m²)' : '(Gesamtwerte)' }}
           </CardDescription>
         </CardHeader>

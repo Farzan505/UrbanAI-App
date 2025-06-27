@@ -1,6 +1,6 @@
 {
   "success": true,
-  "analysis_id": "daf72b6c-c76f-4ec0-9080-27fbbb5af634",
+  "analysis_id": "9a70340c-c868-4b11-bbc7-a752a1f449d8",
   "message": "Analysis completed successfully",
   "data": {
     "baseline_scenario": {
@@ -4778,8 +4778,8 @@
     "summary": {
       "building_info": {
         "ngf_area_sqm": 6536.46,
-        "analysis_timestamp": 1751028730.50686,
-        "execution_time_seconds": 5.430345296859741
+        "analysis_timestamp": 1751031365.676737,
+        "execution_time_seconds": 5.855457067489624
       },
       "investment_costs": {
         "facade": {
@@ -4803,115 +4803,115 @@
           "area_sqm": 497.11
         },
         "hvac": {
-          "total_euro": 0,
-          "per_sqm_ngf_euro": 0.0,
+          "total_euro": 718189.1622979125,
+          "per_sqm_ngf_euro": 109.8743298816045,
           "power_kw": 786.3235530354247
         },
         "total": {
-          "euro": 976636.2173314611,
-          "euro_per_ngf_sqm": 149.41363021137758
+          "euro": 1694825.3796293736,
+          "euro_per_ngf_sqm": 259.2879600929821
         }
       },
       "lca_impacts": {
         "facade": {
           "gwptotal_a2": {
-            "total": 73966.95777934942,
-            "per_sqm_ngf": 11.316057587646743,
+            "total": 1479.3391555869885,
+            "per_sqm_ngf": 0.004526423035058697,
             "unit": "kg CO2-Eq"
           },
           "pert": {
-            "total": 70820.08651076033,
-            "per_sqm_ngf": 10.834624018315775,
+            "total": 1416.4017302152067,
+            "per_sqm_ngf": 0.004333849607326311,
             "unit": "MJ"
           },
           "penrt": {
-            "total": 197972.9456531885,
-            "per_sqm_ngf": 30.28748675172624,
+            "total": 3959.45891306377,
+            "per_sqm_ngf": 0.012114994700690496,
             "unit": "MJ"
           }
         },
         "roof": {
           "gwptotal_a2": {
-            "total": 39258.25672612698,
-            "per_sqm_ngf": 6.00604252548428,
+            "total": 785.1651345225396,
+            "per_sqm_ngf": 0.002402417010193712,
             "unit": "kg CO2-Eq"
           },
           "pert": {
-            "total": 29646.741778579293,
-            "per_sqm_ngf": 4.53559599210877,
+            "total": 592.9348355715858,
+            "per_sqm_ngf": 0.001814238396843508,
             "unit": "MJ"
           },
           "penrt": {
-            "total": 153755.98819178526,
-            "per_sqm_ngf": 23.522822474517593,
+            "total": 3075.1197638357053,
+            "per_sqm_ngf": 0.009409128989807038,
             "unit": "MJ"
           }
         },
         "base": {
           "gwptotal_a2": {
-            "total": 151823.55960875138,
-            "per_sqm_ngf": 23.227184073451284,
+            "total": 3036.4711921750277,
+            "per_sqm_ngf": 0.009290873629380515,
             "unit": "kg CO2-Eq"
           },
           "pert": {
-            "total": 102807.75398526547,
-            "per_sqm_ngf": 15.728353571392692,
+            "total": 2056.1550797053096,
+            "per_sqm_ngf": 0.006291341428557077,
             "unit": "MJ"
           },
           "penrt": {
-            "total": 414681.8329871551,
-            "per_sqm_ngf": 63.44134791418522,
+            "total": 8293.636659743102,
+            "per_sqm_ngf": 0.02537653916567409,
             "unit": "MJ"
           }
         },
         "window": {
           "gwptotal_a2": {
-            "total": 27712.499146924227,
-            "per_sqm_ngf": 4.239680063356041,
+            "total": 554.2499829384845,
+            "per_sqm_ngf": 0.0016958720253424163,
             "unit": "kg CO2-Eq"
           },
           "pert": {
-            "total": 29285.947163797344,
-            "per_sqm_ngf": 4.480398742407564,
+            "total": 585.7189432759469,
+            "per_sqm_ngf": 0.0017921594969630256,
             "unit": "MJ"
           },
           "penrt": {
-            "total": 98537.97419734849,
-            "per_sqm_ngf": 15.07512846362534,
+            "total": 1970.7594839469698,
+            "per_sqm_ngf": 0.006030051385450136,
             "unit": "MJ"
           }
         },
         "hvac": {
           "gwptotal_a2": {
-            "total": 118009.76756794729,
-            "per_sqm_ngf": 18.054079359155764,
+            "total": 2360.1953513589456,
+            "per_sqm_ngf": 0.007221631743662305,
             "unit": "kg CO2-Eq"
           },
           "pert": {
-            "total": 117065.14629742925,
-            "per_sqm_ngf": 17.909563631909208,
+            "total": 2341.302925948585,
+            "per_sqm_ngf": 0.007163825452763683,
             "unit": "MJ"
           },
           "penrt": {
-            "total": 368026.72040926415,
-            "per_sqm_ngf": 56.303675140559896,
+            "total": 7360.534408185283,
+            "per_sqm_ngf": 0.022521470056223958,
             "unit": "MJ"
           }
         },
         "total": {
           "gwptotal_a2": {
-            "total": 410771.0408290993,
-            "per_sqm_ngf": 62.84304360909411,
+            "total": 8215.420816581985,
+            "per_sqm_ngf": 1.2568608721818821,
             "unit": "kg CO2-Eq"
           },
           "pert": {
-            "total": 349625.6757358317,
-            "per_sqm_ngf": 53.488535956134015,
+            "total": 6992.513514716635,
+            "per_sqm_ngf": 1.0697707191226802,
             "unit": "MJ"
           },
           "penrt": {
-            "total": 1232975.4614387415,
-            "per_sqm_ngf": 188.63046074461428,
+            "total": 24659.50922877483,
+            "per_sqm_ngf": 3.772609214892286,
             "unit": "MJ"
           }
         }
@@ -4939,18 +4939,18 @@
             "area_sqm": 497.11
           },
           "hvac": {
-            "total_euro": 0,
-            "per_sqm_ngf_euro": 0.0,
+            "total_euro": 718189.1622979125,
+            "per_sqm_ngf_euro": 109.8743298816045,
             "power_kw": 786.3235530354247
           },
           "total": {
-            "euro": 976636.2173314611,
-            "euro_per_ngf_sqm": 149.41363021137758
+            "euro": 1694825.3796293736,
+            "euro_per_ngf_sqm": 259.2879600929821
           }
         },
         "time_preference_rate": 0.03,
-        "present_value_total_euro": 976636.2173314611,
-        "present_value_per_ngf_sqm_euro": 149.41363021137758,
+        "present_value_total_euro": 1694825.3796293736,
+        "present_value_per_ngf_sqm_euro": 259.2879600929821,
         "ngf_area_sqm": 6536.46
       },
       "differences": [
@@ -5114,10 +5114,10 @@
         "payback_period_years": null
       }
     },
-    "execution_time": 5.430345296859741,
-    "timestamp": 1751028730.5070112,
+    "execution_time": 5.855457067489624,
+    "timestamp": 1751031365.6769059,
     "export_metadata": {
-      "export_timestamp": "2025-06-27T14:52:10.573361",
+      "export_timestamp": "2025-06-27T15:36:05.751796",
       "data_format": "frontend_ready",
       "version": "1.0"
     }
