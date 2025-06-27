@@ -23,23 +23,23 @@ interface RetrofitAnalysisPayload {
   gebplz: string
   building_category: string
   construction_year: string
-  geometry_data: any
-  gmlid_list: string[]
   system_type: string
-  retrofit_scenario_construction?: string | null
-  retrofit_construction_year?: number | null
-  retrofit_system_type?: string
-  retrofit_subsystem_type: string
-  retrofit_hvac_year?: number | null
   window_construction?: string
   wall_construction?: string
   roof_construction?: string
   base_construction?: string
   co2_reduction_scenario: string
   co2_cost_scenario: string
+  gmlid_list?: string[]
+  retrofit_scenario_construction?: string | null
+  retrofit_construction_year?: number | null
+  retrofit_system_type?: string | null
+  retrofit_subsystem_type?: string | null
+  retrofit_hvac_year?: number | null
+  geometry_data?: any
+  sim_results?: any
   time_preference_rate?: number
   dynamic_lca?: boolean
-  sim_results?: any
 }
 
 type SystemType = 'Öl/Gas' | 'Wärmepumpe' | 'Fernwärme' | 'Biomasse'
@@ -211,6 +211,78 @@ export function useRetrofitAnalysis() {
     return validTypes.includes(type as SystemType) ? (type as SystemType) : 'Öl/Gas'
   }
 
+  // Create a unified function to build the payload with all parameters
+  const buildRetrofitPayload = (
+    buildingData: any,
+    geometryData: any,
+    selectedCo2PathScenario: string,
+    selectedCo2CostScenario: string,
+    options: {
+      constructionSelections?: any,
+      retrofitScenario?: any,
+      timePreferenceRate?: number,
+      dynamicLca?: boolean
+    } = {}
+  ): RetrofitAnalysisPayload => {
+    const assumptions = buildingData.buildings_assumptions
+    const gebplz = assumptions.gebplz
+    const gmlIds = buildingData.gmlid_gebid_mapping?.map((mapping: GmlMapping) => mapping.gmlid) || []
+    
+    const actualBuildingCategory = getBuildingCategory(assumptions)
+    const actualConstructionYear = parseConstructionYear(assumptions?.construction_year)
+    
+    // Extract and preserve the results data properly
+    const geometryResults = cleanGeometryData(geometryData)
+    
+    // Base payload with required fields
+    const payload: RetrofitAnalysisPayload = {
+      building_id: assumptions.building_id,
+      gebplz: gebplz,
+      building_category: actualBuildingCategory,
+      construction_year: actualConstructionYear,
+      system_type: assumptions.current_system_type || 'Öl/Gas',
+      co2_reduction_scenario: selectedCo2PathScenario,
+      co2_cost_scenario: selectedCo2CostScenario,
+      gmlid_list: gmlIds,
+      geometry_data: geometryResults,
+      time_preference_rate: options.timePreferenceRate || 0.03,
+      dynamic_lca: options.dynamicLca || false
+    }
+
+    // Add construction selections from Lebenszyklusanalyse if provided
+    if (options.constructionSelections) {
+      payload.window_construction = options.constructionSelections.window_construction
+      payload.wall_construction = options.constructionSelections.wall_construction
+      payload.roof_construction = options.constructionSelections.roof_construction
+      payload.base_construction = options.constructionSelections.base_construction
+      payload.dynamic_lca = options.constructionSelections.dynamic_lca
+    } else {
+      // Use default construction values
+      payload.window_construction = 'W-330-001'
+      payload.wall_construction = 'F-330-001'
+      payload.roof_construction = 'R-360-001'
+      payload.base_construction = 'B-360-001'
+    }
+
+    // Add retrofit scenario data from "Sanierungszenario hinzufügen" if provided
+    if (options.retrofitScenario) {
+      // From energy standard selection
+      if (options.retrofitScenario.energy_standard && options.retrofitScenario.construction_year) {
+        payload.retrofit_scenario_construction = options.retrofitScenario.energy_standard.id
+        payload.retrofit_construction_year = parseInt(options.retrofitScenario.construction_year)
+      }
+      
+      // From HVAC selection
+      if (options.retrofitScenario.hvac && options.retrofitScenario.hvac_year) {
+        payload.retrofit_system_type = options.retrofitScenario.hvac.hvac_type
+        payload.retrofit_subsystem_type = options.retrofitScenario.hvac.hvac_type
+        payload.retrofit_hvac_year = parseInt(options.retrofitScenario.hvac_year)
+      }
+    }
+
+    return payload
+  }
+
   // Base scenario analysis
   const analyzeBaseScenario = async (
     buildingData: any,
@@ -259,18 +331,13 @@ export function useRetrofitAnalysis() {
       // Validate serialization before sending
       validateGeometryDataSerialization(geometryResults, 'for base scenario')
 
-      const payload: RetrofitAnalysisPayload = {
-        building_id: assumptions.building_id,
-        gebplz: gebplz,
-        building_category: actualBuildingCategory,
-        construction_year: actualConstructionYear,
-        gmlid_list: gmlIds,
-        system_type: assumptions.current_system_type,
-        retrofit_subsystem_type: 'Gas',
-        co2_reduction_scenario: selectedCo2PathScenario,
-        co2_cost_scenario: selectedCo2CostScenario,
-        geometry_data: geometryResults
-      }
+      const payload = buildRetrofitPayload(
+        buildingData,
+        geometryData,
+        selectedCo2PathScenario,
+        selectedCo2CostScenario,
+        {} // No special options for base scenario
+      )
 
       console.log('📤 Sending base scenario payload:', payload)
       console.log('📤 GEOMETRY_DATA in payload:', payload.geometry_data)
@@ -421,36 +488,18 @@ export function useRetrofitAnalysis() {
         full_assumptions: assumptions
       })
 
-      const payload: RetrofitAnalysisPayload = {
-        building_id: assumptions.gebid,
-        gebplz: gebplz,
-        building_category: actualBuildingCategory,
-        construction_year: actualConstructionYear,
-        system_type: retrofitScenario?.hvac?.hvac_type || 'Öl/Gas',
-        window_construction: constructionSelections.window_construction,
-        wall_construction: constructionSelections.wall_construction,
-        roof_construction: constructionSelections.roof_construction,
-        base_construction: constructionSelections.base_construction,
-        co2_reduction_scenario: selectedCo2PathScenario,
-        co2_cost_scenario: selectedCo2CostScenario,
-        gmlid_list: gmlIds,
-        geometry_data: geometryResults,
-        dynamic_lca: constructionSelections.dynamic_lca,
-        time_preference_rate: 0.03,
-        retrofit_subsystem_type: retrofitScenario?.hvac?.hvac_type || 'Gas'
-      }
-
-      // Add retrofit scenario data if provided
-      if (retrofitScenario) {
-        if (retrofitScenario.energy_standard && retrofitScenario.construction_year) {
-          payload.retrofit_scenario_construction = retrofitScenario.energy_standard.id
-          payload.retrofit_construction_year = parseInt(retrofitScenario.construction_year)
+      const payload = buildRetrofitPayload(
+        buildingData,
+        geometryData,
+        selectedCo2PathScenario,
+        selectedCo2CostScenario,
+        {
+          constructionSelections,
+          retrofitScenario,
+          timePreferenceRate: 0.03,
+          dynamicLca: constructionSelections.dynamic_lca
         }
-        if (retrofitScenario.hvac && retrofitScenario.hvac_year) {
-          payload.retrofit_system_type = retrofitScenario.hvac.hvac_type
-          payload.retrofit_hvac_year = parseInt(retrofitScenario.hvac_year)
-        }
-      }
+      )
 
       console.log('🏗️ Sending construction analysis payload:', payload)
       console.log('🏗️ GEOMETRY_DATA in payload:', payload.geometry_data)
@@ -562,18 +611,16 @@ export function useRetrofitAnalysis() {
       // Validate serialization before sending
       validateGeometryDataSerialization(geometryResults, 'for retrofit scenario')
 
-      const payload: RetrofitAnalysisPayload = {
-        building_id: assumptions.gebid,
-        gebplz: gebplz,
-        building_category: actualBuildingCategory,
-        construction_year: actualConstructionYear,
-        geometry_data: geometryResults,
-        gmlid_list: gmlIds,
-        system_type: systemType,
-        retrofit_subsystem_type: selectedHVACItem?.hvac_type || 'Gas',
-        co2_reduction_scenario: selectedCo2PathScenario,
-        co2_cost_scenario: selectedCo2CostScenario
-      }
+      const payload = buildRetrofitPayload(
+        buildingData,
+        geometryData,
+        selectedCo2PathScenario,
+        selectedCo2CostScenario,
+        {
+          retrofitScenario,
+          timePreferenceRate: 0.03
+        }
+      )
 
       console.log('📤 Sending retrofit scenario payload:', payload)
       console.log('📤 GEOMETRY_DATA in payload:', payload.geometry_data)
