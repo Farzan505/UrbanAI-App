@@ -1,6 +1,6 @@
 {
   "success": true,
-  "analysis_id": "bb48eb3e-a0d9-4c4a-8172-0b9874253cd2",
+  "analysis_id": "daf72b6c-c76f-4ec0-9080-27fbbb5af634",
   "message": "Analysis completed successfully",
   "data": {
     "baseline_scenario": {
@@ -2907,166 +2907,580 @@
       "hvac": {
         "lca_by_system": [
           {
-            "uuid": "2dfb0a59-e38c-41d3-babc-56c7221d935d",
-            "hvac_number": "HP-400-003",
-            "name_de": "Strom-Wärmepumpe (Luft-Wasser) 7 kW",
-            "allocated_power_kw": 786.3235530354247,
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
             "module": "A1-A3",
             "indicator": "gwptotal_a2",
-            "raw_value": 36595.50769712685,
-            "scaled_value": 36595.50769712685,
+            "raw_value": 46.54001213095824,
+            "scaled_value": 46.54001213095824,
             "unit": "kg CO₂ eq",
             "year": 2036,
             "event_type": "Initial Installation",
             "cause": "Installation",
-            "scaled_value_dynamic": 36595.50769712685,
-            "raw_value_dynamic": 36595.50769712685,
+            "scaled_value_dynamic": 46.54001213095824,
+            "raw_value_dynamic": 46.54001213095824,
             "dynamic_lca_factor": 1.0,
             "total_value": 36595.50769712685
           },
           {
-            "uuid": "2dfb0a59-e38c-41d3-babc-56c7221d935d",
-            "hvac_number": "HP-400-003",
-            "name_de": "Strom-Wärmepumpe (Luft-Wasser) 7 kW",
-            "allocated_power_kw": 786.3235530354247,
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
             "module": "A1-A3",
             "indicator": "pert",
-            "raw_value": 38834.23455655906,
-            "scaled_value": 38834.23455655906,
+            "raw_value": 177.79339309045,
+            "scaled_value": 49.38709314587902,
             "unit": "kWh",
             "year": 2036,
             "event_type": "Initial Installation",
             "cause": "Installation",
-            "scaled_value_dynamic": 38834.23455655906,
-            "raw_value_dynamic": 38834.23455655906,
+            "scaled_value_dynamic": 49.38709314587902,
+            "raw_value_dynamic": 177.79339309045,
             "dynamic_lca_factor": 1.0,
             "total_value": 38834.23455655906
           },
           {
-            "uuid": "2dfb0a59-e38c-41d3-babc-56c7221d935d",
-            "hvac_number": "HP-400-003",
-            "name_de": "Strom-Wärmepumpe (Luft-Wasser) 7 kW",
-            "allocated_power_kw": 786.3235530354247,
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
             "module": "A1-A3",
             "indicator": "penrt",
-            "raw_value": 120680.36215738363,
-            "scaled_value": 120680.36215738363,
+            "raw_value": 552.5066043492197,
+            "scaled_value": 153.47417954291757,
             "unit": "kWh",
             "year": 2036,
             "event_type": "Initial Installation",
             "cause": "Installation",
-            "scaled_value_dynamic": 120680.36215738363,
-            "raw_value_dynamic": 120680.36215738363,
+            "scaled_value_dynamic": 153.47417954291757,
+            "raw_value_dynamic": 552.5066043492197,
             "dynamic_lca_factor": 1.0,
             "total_value": 120680.36215738363
           },
           {
-            "uuid": "2dfb0a59-e38c-41d3-babc-56c7221d935d",
-            "hvac_number": null,
-            "name_de": "Strom-Wärmepumpe (Luft-Wasser) 7 kW",
-            "allocated_power_kw": null,
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
             "module": "B4",
             "indicator": "gwptotal_a2",
-            "raw_value": 39336.58918931576,
-            "scaled_value": 39336.58918931576,
+            "raw_value": 46.54001213095824,
+            "scaled_value": 46.54001213095824,
             "unit": "kg CO₂ eq",
             "year": 2056,
             "event_type": "Replacement",
-            "cause": "Replacement",
-            "scaled_value_dynamic": 39336.58918931576,
-            "raw_value_dynamic": 39336.58918931576,
+            "cause": "Ende der Lebensdauer",
+            "scaled_value_dynamic": 46.54001213095824,
+            "raw_value_dynamic": 46.54001213095824,
             "dynamic_lca_factor": 1.0,
-            "total_value": 39336.58918931576
+            "total_value": 36595.50769712685
           },
           {
-            "uuid": "2dfb0a59-e38c-41d3-babc-56c7221d935d",
-            "hvac_number": null,
-            "name_de": "Strom-Wärmepumpe (Luft-Wasser) 7 kW",
-            "allocated_power_kw": null,
-            "module": "B4",
-            "indicator": "penrt",
-            "raw_value": 122675.57346975472,
-            "scaled_value": 122675.57346975472,
-            "unit": "kWh",
-            "year": 2056,
-            "event_type": "Replacement",
-            "cause": "Replacement",
-            "scaled_value_dynamic": 122675.57346975472,
-            "raw_value_dynamic": 122675.57346975472,
-            "dynamic_lca_factor": 1.0,
-            "total_value": 122675.57346975472
-          },
-          {
-            "uuid": "2dfb0a59-e38c-41d3-babc-56c7221d935d",
-            "hvac_number": null,
-            "name_de": "Strom-Wärmepumpe (Luft-Wasser) 7 kW",
-            "allocated_power_kw": null,
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
             "module": "B4",
             "indicator": "pert",
-            "raw_value": 39021.71543247642,
-            "scaled_value": 39021.71543247642,
+            "raw_value": 177.79339309045,
+            "scaled_value": 49.38709314587902,
             "unit": "kWh",
             "year": 2056,
             "event_type": "Replacement",
-            "cause": "Replacement",
-            "scaled_value_dynamic": 39021.71543247642,
-            "raw_value_dynamic": 39021.71543247642,
+            "cause": "Ende der Lebensdauer",
+            "scaled_value_dynamic": 49.38709314587902,
+            "raw_value_dynamic": 177.79339309045,
             "dynamic_lca_factor": 1.0,
-            "total_value": 39021.71543247642
+            "total_value": 38834.23455655906
           },
           {
-            "uuid": "2dfb0a59-e38c-41d3-babc-56c7221d935d",
-            "hvac_number": null,
-            "name_de": "Strom-Wärmepumpe (Luft-Wasser) 7 kW",
-            "allocated_power_kw": null,
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
+            "module": "B4",
+            "indicator": "penrt",
+            "raw_value": 552.5066043492197,
+            "scaled_value": 153.47417954291757,
+            "unit": "kWh",
+            "year": 2056,
+            "event_type": "Replacement",
+            "cause": "Ende der Lebensdauer",
+            "scaled_value_dynamic": 153.47417954291757,
+            "raw_value_dynamic": 552.5066043492197,
+            "dynamic_lca_factor": 1.0,
+            "total_value": 120680.36215738363
+          },
+          {
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
             "module": "B4",
             "indicator": "gwptotal_a2",
-            "raw_value": 39336.58918931576,
-            "scaled_value": 39336.58918931576,
+            "raw_value": 0.1449495684055129,
+            "scaled_value": 0.1449495684055129,
+            "unit": "kg CO₂ eq",
+            "year": 2056,
+            "event_type": "Replacement",
+            "cause": "Ende der Lebensdauer",
+            "scaled_value_dynamic": 0.1449495684055129,
+            "raw_value_dynamic": 0.1449495684055129,
+            "dynamic_lca_factor": 1.0,
+            "total_value": 113.97725963957424
+          },
+          {
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
+            "module": "B4",
+            "indicator": "pert",
+            "raw_value": 0.6605133423095597,
+            "scaled_value": 0.1834760752000649,
+            "unit": "kWh",
+            "year": 2056,
+            "event_type": "Replacement",
+            "cause": "Ende der Lebensdauer",
+            "scaled_value_dynamic": 0.1834760752000649,
+            "raw_value_dynamic": 0.6605133423095597,
+            "dynamic_lca_factor": 1.0,
+            "total_value": 144.27155934830978
+          },
+          {
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
+            "module": "B4",
+            "indicator": "penrt",
+            "raw_value": 1.8222655340689997,
+            "scaled_value": 0.5061852755226186,
+            "unit": "kWh",
+            "year": 2056,
+            "event_type": "Replacement",
+            "cause": "Ende der Lebensdauer",
+            "scaled_value_dynamic": 0.5061852755226186,
+            "raw_value_dynamic": 1.8222655340689997,
+            "dynamic_lca_factor": 1.0,
+            "total_value": 398.02540434316086
+          },
+          {
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
+            "module": "B4",
+            "indicator": "gwptotal_a2",
+            "raw_value": 2.904744347404371,
+            "scaled_value": 2.904744347404371,
+            "unit": "kg CO₂ eq",
+            "year": 2056,
+            "event_type": "Replacement",
+            "cause": "Ende der Lebensdauer",
+            "scaled_value_dynamic": 2.904744347404371,
+            "raw_value_dynamic": 2.904744347404371,
+            "dynamic_lca_factor": 1.0,
+            "total_value": 2284.068895910571
+          },
+          {
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
+            "module": "B4",
+            "indicator": "pert",
+            "raw_value": 0.3446594177279516,
+            "scaled_value": 0.09573880373763495,
+            "unit": "kWh",
+            "year": 2056,
+            "event_type": "Replacement",
+            "cause": "Ende der Lebensdauer",
+            "scaled_value_dynamic": 0.09573880373763495,
+            "raw_value_dynamic": 0.3446594177279516,
+            "dynamic_lca_factor": 1.0,
+            "total_value": 75.28167631833831
+          },
+          {
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
+            "module": "B4",
+            "indicator": "penrt",
+            "raw_value": 6.991475303099528,
+            "scaled_value": 1.942078026744381,
+            "unit": "kWh",
+            "year": 2056,
+            "event_type": "Replacement",
+            "cause": "Ende der Lebensdauer",
+            "scaled_value_dynamic": 1.942078026744381,
+            "raw_value_dynamic": 6.991475303099528,
+            "dynamic_lca_factor": 1.0,
+            "total_value": 1527.101694261668
+          },
+          {
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
+            "module": "B4",
+            "indicator": "gwptotal_a2",
+            "raw_value": 0.4362521449529971,
+            "scaled_value": 0.4362521449529971,
+            "unit": "kg CO₂ eq",
+            "year": 2056,
+            "event_type": "Replacement",
+            "cause": "Ende der Lebensdauer",
+            "scaled_value_dynamic": 0.4362521449529971,
+            "raw_value_dynamic": 0.4362521449529971,
+            "dynamic_lca_factor": 1.0,
+            "total_value": 343.0353366387658
+          },
+          {
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
+            "module": "B4",
+            "indicator": "pert",
+            "raw_value": -0.14683574246683975,
+            "scaled_value": -0.04078773887095381,
+            "unit": "kWh",
+            "year": 2056,
+            "event_type": "Replacement",
+            "cause": "Ende der Lebensdauer",
+            "scaled_value_dynamic": -0.04078773887095381,
+            "raw_value_dynamic": -0.14683574246683975,
+            "dynamic_lca_factor": 1.0,
+            "total_value": -32.072359749289504
+          },
+          {
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
+            "module": "B4",
+            "indicator": "penrt",
+            "raw_value": 0.3208640600198019,
+            "scaled_value": 0.08912897686418053,
+            "unit": "kWh",
+            "year": 2056,
+            "event_type": "Replacement",
+            "cause": "Ende der Lebensdauer",
+            "scaled_value_dynamic": 0.08912897686418053,
+            "raw_value_dynamic": 0.3208640600198019,
+            "dynamic_lca_factor": 1.0,
+            "total_value": 70.08421376625459
+          },
+          {
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
+            "module": "B4",
+            "indicator": "gwptotal_a2",
+            "raw_value": 46.54001213095824,
+            "scaled_value": 46.54001213095824,
             "unit": "kg CO₂ eq",
             "year": 2076,
             "event_type": "Replacement",
-            "cause": "Replacement",
-            "scaled_value_dynamic": 39336.58918931576,
-            "raw_value_dynamic": 39336.58918931576,
+            "cause": "Ende der Lebensdauer",
+            "scaled_value_dynamic": 46.54001213095824,
+            "raw_value_dynamic": 46.54001213095824,
             "dynamic_lca_factor": 1.0,
-            "total_value": 39336.58918931576
+            "total_value": 36595.50769712685
           },
           {
-            "uuid": "2dfb0a59-e38c-41d3-babc-56c7221d935d",
-            "hvac_number": null,
-            "name_de": "Strom-Wärmepumpe (Luft-Wasser) 7 kW",
-            "allocated_power_kw": null,
-            "module": "B4",
-            "indicator": "penrt",
-            "raw_value": 122675.57346975472,
-            "scaled_value": 122675.57346975472,
-            "unit": "kWh",
-            "year": 2076,
-            "event_type": "Replacement",
-            "cause": "Replacement",
-            "scaled_value_dynamic": 122675.57346975472,
-            "raw_value_dynamic": 122675.57346975472,
-            "dynamic_lca_factor": 1.0,
-            "total_value": 122675.57346975472
-          },
-          {
-            "uuid": "2dfb0a59-e38c-41d3-babc-56c7221d935d",
-            "hvac_number": null,
-            "name_de": "Strom-Wärmepumpe (Luft-Wasser) 7 kW",
-            "allocated_power_kw": null,
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
             "module": "B4",
             "indicator": "pert",
-            "raw_value": 39021.71543247642,
-            "scaled_value": 39021.71543247642,
+            "raw_value": 177.79339309045,
+            "scaled_value": 49.38709314587902,
             "unit": "kWh",
             "year": 2076,
             "event_type": "Replacement",
-            "cause": "Replacement",
-            "scaled_value_dynamic": 39021.71543247642,
-            "raw_value_dynamic": 39021.71543247642,
+            "cause": "Ende der Lebensdauer",
+            "scaled_value_dynamic": 49.38709314587902,
+            "raw_value_dynamic": 177.79339309045,
             "dynamic_lca_factor": 1.0,
-            "total_value": 39021.71543247642
+            "total_value": 38834.23455655906
+          },
+          {
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
+            "module": "B4",
+            "indicator": "penrt",
+            "raw_value": 552.5066043492197,
+            "scaled_value": 153.47417954291757,
+            "unit": "kWh",
+            "year": 2076,
+            "event_type": "Replacement",
+            "cause": "Ende der Lebensdauer",
+            "scaled_value_dynamic": 153.47417954291757,
+            "raw_value_dynamic": 552.5066043492197,
+            "dynamic_lca_factor": 1.0,
+            "total_value": 120680.36215738363
+          },
+          {
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
+            "module": "B4",
+            "indicator": "gwptotal_a2",
+            "raw_value": 0.1449495684055129,
+            "scaled_value": 0.1449495684055129,
+            "unit": "kg CO₂ eq",
+            "year": 2076,
+            "event_type": "Replacement",
+            "cause": "Ende der Lebensdauer",
+            "scaled_value_dynamic": 0.1449495684055129,
+            "raw_value_dynamic": 0.1449495684055129,
+            "dynamic_lca_factor": 1.0,
+            "total_value": 113.97725963957424
+          },
+          {
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
+            "module": "B4",
+            "indicator": "pert",
+            "raw_value": 0.6605133423095597,
+            "scaled_value": 0.1834760752000649,
+            "unit": "kWh",
+            "year": 2076,
+            "event_type": "Replacement",
+            "cause": "Ende der Lebensdauer",
+            "scaled_value_dynamic": 0.1834760752000649,
+            "raw_value_dynamic": 0.6605133423095597,
+            "dynamic_lca_factor": 1.0,
+            "total_value": 144.27155934830978
+          },
+          {
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
+            "module": "B4",
+            "indicator": "penrt",
+            "raw_value": 1.8222655340689997,
+            "scaled_value": 0.5061852755226186,
+            "unit": "kWh",
+            "year": 2076,
+            "event_type": "Replacement",
+            "cause": "Ende der Lebensdauer",
+            "scaled_value_dynamic": 0.5061852755226186,
+            "raw_value_dynamic": 1.8222655340689997,
+            "dynamic_lca_factor": 1.0,
+            "total_value": 398.02540434316086
+          },
+          {
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
+            "module": "B4",
+            "indicator": "gwptotal_a2",
+            "raw_value": 2.904744347404371,
+            "scaled_value": 2.904744347404371,
+            "unit": "kg CO₂ eq",
+            "year": 2076,
+            "event_type": "Replacement",
+            "cause": "Ende der Lebensdauer",
+            "scaled_value_dynamic": 2.904744347404371,
+            "raw_value_dynamic": 2.904744347404371,
+            "dynamic_lca_factor": 1.0,
+            "total_value": 2284.068895910571
+          },
+          {
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
+            "module": "B4",
+            "indicator": "pert",
+            "raw_value": 0.3446594177279516,
+            "scaled_value": 0.09573880373763495,
+            "unit": "kWh",
+            "year": 2076,
+            "event_type": "Replacement",
+            "cause": "Ende der Lebensdauer",
+            "scaled_value_dynamic": 0.09573880373763495,
+            "raw_value_dynamic": 0.3446594177279516,
+            "dynamic_lca_factor": 1.0,
+            "total_value": 75.28167631833831
+          },
+          {
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
+            "module": "B4",
+            "indicator": "penrt",
+            "raw_value": 6.991475303099528,
+            "scaled_value": 1.942078026744381,
+            "unit": "kWh",
+            "year": 2076,
+            "event_type": "Replacement",
+            "cause": "Ende der Lebensdauer",
+            "scaled_value_dynamic": 1.942078026744381,
+            "raw_value_dynamic": 6.991475303099528,
+            "dynamic_lca_factor": 1.0,
+            "total_value": 1527.101694261668
+          },
+          {
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
+            "module": "B4",
+            "indicator": "gwptotal_a2",
+            "raw_value": 0.4362521449529971,
+            "scaled_value": 0.4362521449529971,
+            "unit": "kg CO₂ eq",
+            "year": 2076,
+            "event_type": "Replacement",
+            "cause": "Ende der Lebensdauer",
+            "scaled_value_dynamic": 0.4362521449529971,
+            "raw_value_dynamic": 0.4362521449529971,
+            "dynamic_lca_factor": 1.0,
+            "total_value": 343.0353366387658
+          },
+          {
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
+            "module": "B4",
+            "indicator": "pert",
+            "raw_value": -0.14683574246683975,
+            "scaled_value": -0.04078773887095381,
+            "unit": "kWh",
+            "year": 2076,
+            "event_type": "Replacement",
+            "cause": "Ende der Lebensdauer",
+            "scaled_value_dynamic": -0.04078773887095381,
+            "raw_value_dynamic": -0.14683574246683975,
+            "dynamic_lca_factor": 1.0,
+            "total_value": -32.072359749289504
+          },
+          {
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
+            "module": "B4",
+            "indicator": "penrt",
+            "raw_value": 0.3208640600198019,
+            "scaled_value": 0.08912897686418053,
+            "unit": "kWh",
+            "year": 2076,
+            "event_type": "Replacement",
+            "cause": "Ende der Lebensdauer",
+            "scaled_value_dynamic": 0.08912897686418053,
+            "raw_value_dynamic": 0.3208640600198019,
+            "dynamic_lca_factor": 1.0,
+            "total_value": 70.08421376625459
+          },
+          {
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
+            "module": "C2",
+            "indicator": "gwptotal_a2",
+            "raw_value": 0.1449495684055129,
+            "scaled_value": 0.1449495684055129,
+            "unit": "kg CO₂ eq",
+            "year": 2086,
+            "event_type": "End of Life",
+            "cause": "Ende des Betrachtungszeitraums im Lebenszyklus",
+            "scaled_value_dynamic": 0.1449495684055129,
+            "raw_value_dynamic": 0.1449495684055129,
+            "dynamic_lca_factor": 1.0,
+            "total_value": 113.97725963957424
+          },
+          {
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
+            "module": "C2",
+            "indicator": "pert",
+            "raw_value": 0.6605133423095597,
+            "scaled_value": 0.1834760752000649,
+            "unit": "kWh",
+            "year": 2086,
+            "event_type": "End of Life",
+            "cause": "Ende des Betrachtungszeitraums im Lebenszyklus",
+            "scaled_value_dynamic": 0.1834760752000649,
+            "raw_value_dynamic": 0.6605133423095597,
+            "dynamic_lca_factor": 1.0,
+            "total_value": 144.27155934830978
+          },
+          {
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
+            "module": "C2",
+            "indicator": "penrt",
+            "raw_value": 1.8222655340689997,
+            "scaled_value": 0.5061852755226186,
+            "unit": "kWh",
+            "year": 2086,
+            "event_type": "End of Life",
+            "cause": "Ende des Betrachtungszeitraums im Lebenszyklus",
+            "scaled_value_dynamic": 0.5061852755226186,
+            "raw_value_dynamic": 1.8222655340689997,
+            "dynamic_lca_factor": 1.0,
+            "total_value": 398.02540434316086
+          },
+          {
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
+            "module": "C3",
+            "indicator": "gwptotal_a2",
+            "raw_value": 2.904744347404371,
+            "scaled_value": 2.904744347404371,
+            "unit": "kg CO₂ eq",
+            "year": 2086,
+            "event_type": "End of Life",
+            "cause": "Ende des Betrachtungszeitraums im Lebenszyklus",
+            "scaled_value_dynamic": 2.904744347404371,
+            "raw_value_dynamic": 2.904744347404371,
+            "dynamic_lca_factor": 1.0,
+            "total_value": 2284.068895910571
+          },
+          {
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
+            "module": "C3",
+            "indicator": "pert",
+            "raw_value": 0.3446594177279516,
+            "scaled_value": 0.09573880373763495,
+            "unit": "kWh",
+            "year": 2086,
+            "event_type": "End of Life",
+            "cause": "Ende des Betrachtungszeitraums im Lebenszyklus",
+            "scaled_value_dynamic": 0.09573880373763495,
+            "raw_value_dynamic": 0.3446594177279516,
+            "dynamic_lca_factor": 1.0,
+            "total_value": 75.28167631833831
+          },
+          {
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
+            "module": "C3",
+            "indicator": "penrt",
+            "raw_value": 6.991475303099528,
+            "scaled_value": 1.942078026744381,
+            "unit": "kWh",
+            "year": 2086,
+            "event_type": "End of Life",
+            "cause": "Ende des Betrachtungszeitraums im Lebenszyklus",
+            "scaled_value_dynamic": 1.942078026744381,
+            "raw_value_dynamic": 6.991475303099528,
+            "dynamic_lca_factor": 1.0,
+            "total_value": 1527.101694261668
+          },
+          {
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
+            "module": "C4",
+            "indicator": "gwptotal_a2",
+            "raw_value": 0.4362521449529971,
+            "scaled_value": 0.4362521449529971,
+            "unit": "kg CO₂ eq",
+            "year": 2086,
+            "event_type": "End of Life",
+            "cause": "Ende des Betrachtungszeitraums im Lebenszyklus",
+            "scaled_value_dynamic": 0.4362521449529971,
+            "raw_value_dynamic": 0.4362521449529971,
+            "dynamic_lca_factor": 1.0,
+            "total_value": 343.0353366387658
+          },
+          {
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
+            "module": "C4",
+            "indicator": "pert",
+            "raw_value": -0.14683574246683975,
+            "scaled_value": -0.04078773887095381,
+            "unit": "kWh",
+            "year": 2086,
+            "event_type": "End of Life",
+            "cause": "Ende des Betrachtungszeitraums im Lebenszyklus",
+            "scaled_value_dynamic": -0.04078773887095381,
+            "raw_value_dynamic": -0.14683574246683975,
+            "dynamic_lca_factor": 1.0,
+            "total_value": -32.072359749289504
+          },
+          {
+            "uuid": "interpolated_HP-400-003",
+            "name_de": "Interpolated HP-400-003",
+            "module": "C4",
+            "indicator": "penrt",
+            "raw_value": 0.3208640600198019,
+            "scaled_value": 0.08912897686418053,
+            "unit": "kWh",
+            "year": 2086,
+            "event_type": "End of Life",
+            "cause": "Ende des Betrachtungszeitraums im Lebenszyklus",
+            "scaled_value_dynamic": 0.08912897686418053,
+            "raw_value_dynamic": 0.3208640600198019,
+            "dynamic_lca_factor": 1.0,
+            "total_value": 70.08421376625459
           }
         ],
         "replacement_schedule": [
@@ -3093,6 +3507,14 @@
             "name_de": "Strom-Wärmepumpe (Luft-Wasser) 7 kW",
             "allocated_power_kw": 786.3235530354247,
             "event_type": "Replacement"
+          },
+          {
+            "year": 2086,
+            "hvac_number": "HP-400-003",
+            "uuid": "2dfb0a59-e38c-41d3-babc-56c7221d935d",
+            "name_de": "Strom-Wärmepumpe (Luft-Wasser) 7 kW",
+            "allocated_power_kw": 786.3235530354247,
+            "event_type": "End of Life"
           }
         ],
         "lcc_by_system": [
@@ -3106,7 +3528,8 @@
             "a": 894.08,
             "b": 15153.0,
             "c": 1.0,
-            "cost": 718189.1622979125
+            "total_cost": 718189.1622979125,
+            "cost_per_kw": 913.3506932680641
           },
           {
             "year": 2056,
@@ -3118,7 +3541,8 @@
             "a": 894.08,
             "b": 15153.0,
             "c": 1.0,
-            "cost": 718189.1622979125
+            "total_cost": 718189.1622979125,
+            "cost_per_kw": 913.3506932680641
           },
           {
             "year": 2076,
@@ -3130,27 +3554,28 @@
             "a": 894.08,
             "b": 15153.0,
             "c": 1.0,
-            "cost": 718189.1622979125
+            "total_cost": 718189.1622979125,
+            "cost_per_kw": 913.3506932680641
           }
         ],
         "summary": {
           "hvac_number": "HP-400-003",
           "power_requirement": 786.3235530354247,
-          "total_cost_euro": 2154567.4868937377,
-          "cost_per_kw_euro": 2740.0520798041925,
+          "total_cost_euro": 0,
+          "cost_per_kw_euro": 0.0,
           "installation_year": 2036,
           "lifecycle_years": 50,
           "final_impacts": {
             "gwptotal_a2": {
-              "value": 115268.68607575836,
+              "value": 118009.76756794729,
               "unit": "kg CO₂ eq"
             },
             "pert": {
-              "value": 116877.66542151189,
+              "value": 117065.14629742925,
               "unit": "kWh"
             },
             "penrt": {
-              "value": 366031.5090968931,
+              "value": 368026.72040926415,
               "unit": "kWh"
             }
           },
@@ -4353,75 +4778,180 @@
     "summary": {
       "building_info": {
         "ngf_area_sqm": 6536.46,
-        "analysis_timestamp": 1750948265.535543,
-        "execution_time_seconds": 5.3214170932769775
+        "analysis_timestamp": 1751028730.50686,
+        "execution_time_seconds": 5.430345296859741
       },
       "investment_costs": {
         "facade": {
           "total_euro": 144613.90399611113,
-          "per_sqm_euro": 71.34381055555556,
+          "per_sqm_ngf_euro": 22.124193217140643,
           "area_sqm": 2027.0
         },
         "roof": {
           "total_euro": 229091.4382083167,
-          "per_sqm_euro": 102.42614544444444,
+          "per_sqm_ngf_euro": 35.04824296458889,
           "area_sqm": 2236.65
         },
         "base": {
           "total_euro": 140770.81506453335,
-          "per_sqm_euro": 80.92881333333334,
+          "per_sqm_ngf_euro": 21.536246693857738,
           "area_sqm": 1739.44
         },
         "window": {
           "total_euro": 462160.06006249995,
-          "per_sqm_euro": 929.6937499999999,
+          "per_sqm_ngf_euro": 70.70494733579031,
           "area_sqm": 497.11
         },
         "hvac": {
-          "total_euro": 718189.1622979125,
-          "per_kw_euro": 913.3506932680641,
+          "total_euro": 0,
+          "per_sqm_ngf_euro": 0.0,
           "power_kw": 786.3235530354247
         },
         "total": {
-          "euro": 1694825.3796293736,
-          "euro_per_ngf_sqm": 259.2879600929821
+          "euro": 976636.2173314611,
+          "euro_per_ngf_sqm": 149.41363021137758
+        }
+      },
+      "lca_impacts": {
+        "facade": {
+          "gwptotal_a2": {
+            "total": 73966.95777934942,
+            "per_sqm_ngf": 11.316057587646743,
+            "unit": "kg CO2-Eq"
+          },
+          "pert": {
+            "total": 70820.08651076033,
+            "per_sqm_ngf": 10.834624018315775,
+            "unit": "MJ"
+          },
+          "penrt": {
+            "total": 197972.9456531885,
+            "per_sqm_ngf": 30.28748675172624,
+            "unit": "MJ"
+          }
+        },
+        "roof": {
+          "gwptotal_a2": {
+            "total": 39258.25672612698,
+            "per_sqm_ngf": 6.00604252548428,
+            "unit": "kg CO2-Eq"
+          },
+          "pert": {
+            "total": 29646.741778579293,
+            "per_sqm_ngf": 4.53559599210877,
+            "unit": "MJ"
+          },
+          "penrt": {
+            "total": 153755.98819178526,
+            "per_sqm_ngf": 23.522822474517593,
+            "unit": "MJ"
+          }
+        },
+        "base": {
+          "gwptotal_a2": {
+            "total": 151823.55960875138,
+            "per_sqm_ngf": 23.227184073451284,
+            "unit": "kg CO2-Eq"
+          },
+          "pert": {
+            "total": 102807.75398526547,
+            "per_sqm_ngf": 15.728353571392692,
+            "unit": "MJ"
+          },
+          "penrt": {
+            "total": 414681.8329871551,
+            "per_sqm_ngf": 63.44134791418522,
+            "unit": "MJ"
+          }
+        },
+        "window": {
+          "gwptotal_a2": {
+            "total": 27712.499146924227,
+            "per_sqm_ngf": 4.239680063356041,
+            "unit": "kg CO2-Eq"
+          },
+          "pert": {
+            "total": 29285.947163797344,
+            "per_sqm_ngf": 4.480398742407564,
+            "unit": "MJ"
+          },
+          "penrt": {
+            "total": 98537.97419734849,
+            "per_sqm_ngf": 15.07512846362534,
+            "unit": "MJ"
+          }
+        },
+        "hvac": {
+          "gwptotal_a2": {
+            "total": 118009.76756794729,
+            "per_sqm_ngf": 18.054079359155764,
+            "unit": "kg CO2-Eq"
+          },
+          "pert": {
+            "total": 117065.14629742925,
+            "per_sqm_ngf": 17.909563631909208,
+            "unit": "MJ"
+          },
+          "penrt": {
+            "total": 368026.72040926415,
+            "per_sqm_ngf": 56.303675140559896,
+            "unit": "MJ"
+          }
+        },
+        "total": {
+          "gwptotal_a2": {
+            "total": 410771.0408290993,
+            "per_sqm_ngf": 62.84304360909411,
+            "unit": "kg CO2-Eq"
+          },
+          "pert": {
+            "total": 349625.6757358317,
+            "per_sqm_ngf": 53.488535956134015,
+            "unit": "MJ"
+          },
+          "penrt": {
+            "total": 1232975.4614387415,
+            "per_sqm_ngf": 188.63046074461428,
+            "unit": "MJ"
+          }
         }
       },
       "lifecycle_costs": {
         "investment_costs": {
           "facade": {
             "total_euro": 144613.90399611113,
-            "per_sqm_euro": 71.34381055555556,
+            "per_sqm_ngf_euro": 22.124193217140643,
             "area_sqm": 2027.0
           },
           "roof": {
             "total_euro": 229091.4382083167,
-            "per_sqm_euro": 102.42614544444444,
+            "per_sqm_ngf_euro": 35.04824296458889,
             "area_sqm": 2236.65
           },
           "base": {
             "total_euro": 140770.81506453335,
-            "per_sqm_euro": 80.92881333333334,
+            "per_sqm_ngf_euro": 21.536246693857738,
             "area_sqm": 1739.44
           },
           "window": {
             "total_euro": 462160.06006249995,
-            "per_sqm_euro": 929.6937499999999,
+            "per_sqm_ngf_euro": 70.70494733579031,
             "area_sqm": 497.11
           },
           "hvac": {
-            "total_euro": 718189.1622979125,
-            "per_kw_euro": 913.3506932680641,
+            "total_euro": 0,
+            "per_sqm_ngf_euro": 0.0,
             "power_kw": 786.3235530354247
           },
           "total": {
-            "euro": 1694825.3796293736,
-            "euro_per_ngf_sqm": 259.2879600929821
+            "euro": 976636.2173314611,
+            "euro_per_ngf_sqm": 149.41363021137758
           }
         },
         "time_preference_rate": 0.03,
-        "present_value_total_euro": 1694825.3796293736,
-        "present_value_per_ngf_sqm_euro": 259.2879600929821
+        "present_value_total_euro": 976636.2173314611,
+        "present_value_per_ngf_sqm_euro": 149.41363021137758,
+        "ngf_area_sqm": 6536.46
       },
       "differences": [
         {
@@ -4564,8 +5094,8 @@
           "value_type": "Total LCA Impact",
           "unit": "kg CO2-eq",
           "status_quo": 0,
-          "scenario": 408029.959,
-          "absolute_difference": 408029.959,
+          "scenario": 410771.041,
+          "absolute_difference": 410771.041,
           "percentage_difference": 100
         },
         {
@@ -4573,8 +5103,8 @@
           "value_type": "Normalized LCA Impact",
           "unit": "kg CO2-eq/(m²a)",
           "status_quo": 0.0,
-          "scenario": 1.248474,
-          "absolute_difference": 1.248474,
+          "scenario": 1.256861,
+          "absolute_difference": 1.256861,
           "percentage_difference": 100
         }
       ],
@@ -4584,10 +5114,10 @@
         "payback_period_years": null
       }
     },
-    "execution_time": 5.3214170932769775,
-    "timestamp": 1750948265.5356958,
+    "execution_time": 5.430345296859741,
+    "timestamp": 1751028730.5070112,
     "export_metadata": {
-      "export_timestamp": "2025-06-26T16:31:05.580513",
+      "export_timestamp": "2025-06-27T14:52:10.573361",
       "data_format": "frontend_ready",
       "version": "1.0"
     }

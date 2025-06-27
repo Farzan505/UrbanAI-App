@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -47,20 +47,50 @@ const effectiveLcaLccResults = computed(() => {
 
 // Reactive state
 const activeTab = ref('lca') // 'lca' or 'lcc'
-const viewMode = ref('building') // 'building' or 'component'
+const viewMode = ref('building') // 'building', 'component', or 'system'
 const selectedComponent = ref('facade') // 'facade', 'roof', 'base', 'window', 'hvac'
 const selectedIndicator = ref('gwptotal_a2') // for LCA
 const showPerM2 = ref(false) // toggle between total and per m²
+
+// Watch for view mode changes to set appropriate default component
+watch(viewMode, (newMode) => {
+  const results = effectiveLcaLccResults.value
+  if (!results) return
+  
+  if (newMode === 'system' && results.hvac) {
+    selectedComponent.value = 'hvac'
+  } else if (newMode === 'component') {
+    // Set to first available building component
+    const buildingComponents = Object.keys(results).filter(key => key !== 'hvac')
+    if (buildingComponents.length > 0) {
+      selectedComponent.value = buildingComponents[0]
+    }
+  }
+})
 
 // Available components
 const availableComponents = computed(() => {
   const results = effectiveLcaLccResults.value
   if (!results) return []
-  return Object.keys(results).map(key => ({
-    key,
-    label: getComponentLabel(key),
-    icon: getComponentIcon(key)
-  }))
+  
+  if (viewMode.value === 'component') {
+    // Show only building components (excluding hvac)
+    const buildingComponents = Object.keys(results).filter(key => key !== 'hvac')
+    return buildingComponents.map(key => ({
+      key,
+      label: getComponentLabel(key),
+      icon: getComponentIcon(key)
+    }))
+  } else if (viewMode.value === 'system' && results.hvac) {
+    // Show only HVAC/Wärmeversorgung
+    return [{
+      key: 'hvac',
+      label: 'Wärmeversorgung',
+      icon: getComponentIcon('hvac')
+    }]
+  }
+  
+  return []
 })
 
 // Available LCA indicators
@@ -77,7 +107,7 @@ function getComponentLabel(key: string): string {
     roof: 'Dach',
     base: 'Bodenplatte',
     window: 'Fenster',
-    hvac: 'TGA'
+    hvac: 'Wärmeversorgung'
   }
   return labels[key] || key
 }
@@ -116,7 +146,8 @@ const buildingLevelData = computed(() => {
   const results = effectiveLcaLccResults.value
   if (!results) return null
 
-  const components = Object.keys(results)
+  // Exclude HVAC from building components as it's handled separately
+  const components = Object.keys(results).filter(key => key !== 'hvac')
   let totalCost = 0
   let totalGWP = 0
   let totalPERT = 0
@@ -189,109 +220,216 @@ const componentLevelData = computed(() => {
   const componentData = results[selectedComponent.value]
   if (!componentData) return null
 
-  // Process LCC data by material
-  const lccData = componentData.lcc_by_material || []
-  const lccByYear = lccData.reduce((acc: any, item: any) => {
-    const year = item.year
-    if (!acc[year]) {
-      acc[year] = {
-        year,
-        totalCost: 0,
-        materials: []
+  // Handle HVAC data differently
+  if (selectedComponent.value === 'hvac') {
+    // Process LCC data by system for HVAC
+    const lccData = componentData.lcc_by_system || []
+    const lccByYear = lccData.reduce((acc: any, item: any) => {
+      const year = item.year
+      if (!acc[year]) {
+        acc[year] = {
+          year,
+          totalCost: 0,
+          systems: []
+        }
       }
-    }
-    const totalCost = item.total_cost || 0
-    const costPerM2 = item.cost_per_m2 || 0
-    
-    acc[year].totalCost += totalCost
-    acc[year].materials.push({
-      name: item.name_de,
-      cost: totalCost,
-      total_cost: totalCost,
-      cost_per_m2: costPerM2,
-      eventType: item.event_type,
-      cause: item.cause,
-      module: item.module
-    })
-    return acc
-  }, {})
+      const totalCost = item.total_cost || 0
+      const costPerKw = item.cost_per_kw || 0
+      
+      acc[year].totalCost += totalCost
+      acc[year].systems.push({
+        name: item.name_de,
+        cost: totalCost,
+        total_cost: totalCost,
+        cost_per_kw: costPerKw,
+        eventType: item.event_type,
+        hvacNumber: item.hvac_number,
+        power: item.allocated_power_kw
+      })
+      return acc
+    }, {})
 
-  // Process LCA data by material - group by year and indicator
-  const lcaData = componentData.lca_by_material || []
-  const lcaByYear = lcaData.reduce((acc: any, item: any) => {
-    // Use year if available, otherwise replacement_year, otherwise default to 2030
-    const year = item.year || item.replacement_year || 2030
-    const indicator = item.indicator
-    
-    if (!acc[year]) {
-      acc[year] = {
-        year,
-        indicators: {}
+    // Process LCA data by system for HVAC
+    const lcaData = componentData.lca_by_system || []
+    const lcaByYear = lcaData.reduce((acc: any, item: any) => {
+      const year = item.year
+      const indicator = item.indicator
+      
+      if (!acc[year]) {
+        acc[year] = {
+          year,
+          indicators: {}
+        }
       }
-    }
-    
-    if (!acc[year].indicators[indicator]) {
-      acc[year].indicators[indicator] = {
-        indicator,
-        unit: item.unit,
-        materials: []
+      
+      if (!acc[year].indicators[indicator]) {
+        acc[year].indicators[indicator] = {
+          indicator,
+          unit: item.unit,
+          systems: []
+        }
       }
-    }
-    
-    acc[year].indicators[indicator].materials.push({
-      name: item.name_de,
-      uuid: item.uuid,
-      position_number: item.position_number,
-      lifespan: item.lifespan,
-      total_value: item.total_value || 0,
-      raw_value: item.raw_value || 0,
-      scaled_value: item.scaled_value || 0,
-      scaled_value_dynamic: item.scaled_value_dynamic || item.scaled_value || 0,
-      module: item.module,
-      year: year,
-      eventType: item.event_type,
-      cause: item.cause
-    })
-    return acc
-  }, {})
+      
+      acc[year].indicators[indicator].systems.push({
+        name: item.name_de,
+        uuid: item.uuid,
+        total_value: item.total_value || 0,
+        raw_value: item.raw_value || 0,
+        scaled_value: item.scaled_value || 0,
+        scaled_value_dynamic: item.scaled_value_dynamic || item.scaled_value || 0,
+        module: item.module,
+        year: year,
+        eventType: item.event_type,
+        cause: item.cause
+      })
+      return acc
+    }, {})
 
-  // Also keep the old structure for backward compatibility
-  const lcaByIndicator = lcaData.reduce((acc: any, item: any) => {
-    const indicator = item.indicator
-    if (!acc[indicator]) {
-      acc[indicator] = {
-        indicator,
-        unit: item.unit,
-        materials: []
+    // Also keep the old structure for backward compatibility
+    const lcaByIndicator = lcaData.reduce((acc: any, item: any) => {
+      const indicator = item.indicator
+      if (!acc[indicator]) {
+        acc[indicator] = {
+          indicator,
+          unit: item.unit,
+          systems: []
+        }
       }
-    }
-    acc[indicator].materials.push({
-      name: item.name_de,
-      uuid: item.uuid,
-      position_number: item.position_number,
-      lifespan: item.lifespan,
-      total_value: item.total_value || 0,
-      raw_value: item.raw_value || 0,
-      scaled_value: item.scaled_value || 0,
-      scaled_value_dynamic: item.scaled_value_dynamic || item.scaled_value || 0,
-      module: item.module,
-      year: item.year || item.replacement_year || 2030,
-      eventType: item.event_type,
-      cause: item.cause
-    })
-    return acc
-  }, {})
+      acc[indicator].systems.push({
+        name: item.name_de,
+        uuid: item.uuid,
+        total_value: item.total_value || 0,
+        raw_value: item.raw_value || 0,
+        scaled_value: item.scaled_value || 0,
+        scaled_value_dynamic: item.scaled_value_dynamic || item.scaled_value || 0,
+        module: item.module,
+        year: item.year,
+        eventType: item.event_type,
+        cause: item.cause
+      })
+      return acc
+    }, {})
 
-  return {
-    summary: componentData.summary,
-    lcc: {
-      byYear: Object.values(lccByYear),
-      timeline: Object.values(lccByYear).sort((a: any, b: any) => a.year - b.year)
-    },
-    lca: {
-      byYear: lcaByYear,
-      byIndicator: lcaByIndicator,
-      indicators: Object.keys(lcaByIndicator)
+    return {
+      summary: componentData.summary,
+      lcc: {
+        byYear: Object.values(lccByYear),
+        timeline: Object.values(lccByYear).sort((a: any, b: any) => a.year - b.year)
+      },
+      lca: {
+        byYear: lcaByYear,
+        byIndicator: lcaByIndicator,
+        indicators: Object.keys(lcaByIndicator)
+      },
+      isHvac: true
+    }
+  } else {
+    // Handle regular building components (existing code)
+    // Process LCC data by material
+    const lccData = componentData.lcc_by_material || []
+    const lccByYear = lccData.reduce((acc: any, item: any) => {
+      const year = item.year
+      if (!acc[year]) {
+        acc[year] = {
+          year,
+          totalCost: 0,
+          materials: []
+        }
+      }
+      const totalCost = item.total_cost || 0
+      const costPerM2 = item.cost_per_m2 || 0
+      
+      acc[year].totalCost += totalCost
+      acc[year].materials.push({
+        name: item.name_de,
+        cost: totalCost,
+        total_cost: totalCost,
+        cost_per_m2: costPerM2,
+        eventType: item.event_type,
+        cause: item.cause,
+        module: item.module
+      })
+      return acc
+    }, {})
+
+    // Process LCA data by material - group by year and indicator
+    const lcaData = componentData.lca_by_material || []
+    const lcaByYear = lcaData.reduce((acc: any, item: any) => {
+      // Use year if available, otherwise replacement_year, otherwise default to 2030
+      const year = item.year || item.replacement_year || 2030
+      const indicator = item.indicator
+      
+      if (!acc[year]) {
+        acc[year] = {
+          year,
+          indicators: {}
+        }
+      }
+      
+      if (!acc[year].indicators[indicator]) {
+        acc[year].indicators[indicator] = {
+          indicator,
+          unit: item.unit,
+          materials: []
+        }
+      }
+      
+      acc[year].indicators[indicator].materials.push({
+        name: item.name_de,
+        uuid: item.uuid,
+        position_number: item.position_number,
+        lifespan: item.lifespan,
+        total_value: item.total_value || 0,
+        raw_value: item.raw_value || 0,
+        scaled_value: item.scaled_value || 0,
+        scaled_value_dynamic: item.scaled_value_dynamic || item.scaled_value || 0,
+        module: item.module,
+        year: year,
+        eventType: item.event_type,
+        cause: item.cause
+      })
+      return acc
+    }, {})
+
+    // Also keep the old structure for backward compatibility
+    const lcaByIndicator = lcaData.reduce((acc: any, item: any) => {
+      const indicator = item.indicator
+      if (!acc[indicator]) {
+        acc[indicator] = {
+          indicator,
+          unit: item.unit,
+          materials: []
+        }
+      }
+      acc[indicator].materials.push({
+        name: item.name_de,
+        uuid: item.uuid,
+        position_number: item.position_number,
+        lifespan: item.lifespan,
+        total_value: item.total_value || 0,
+        raw_value: item.raw_value || 0,
+        scaled_value: item.scaled_value || 0,
+        scaled_value_dynamic: item.scaled_value_dynamic || item.scaled_value || 0,
+        module: item.module,
+        year: item.year || item.replacement_year || 2030,
+        eventType: item.event_type,
+        cause: item.cause
+      })
+      return acc
+    }, {})
+
+    return {
+      summary: componentData.summary,
+      lcc: {
+        byYear: Object.values(lccByYear),
+        timeline: Object.values(lccByYear).sort((a: any, b: any) => a.year - b.year)
+      },
+      lca: {
+        byYear: lcaByYear,
+        byIndicator: lcaByIndicator,
+        indicators: Object.keys(lcaByIndicator)
+      },
+      isHvac: false
     }
   }
 })
@@ -339,29 +477,39 @@ const yearBasedLccChartData = computed(() => {
   const lccData = componentLevelData.value.lcc.byYear
   if (!lccData || lccData.length === 0) return null
 
-  // Get all unique materials across all years
-  const allMaterials = new Set()
+  const isHvac = componentLevelData.value.isHvac
+
+  // Get all unique materials/systems across all years
+  const allItems = new Set()
   lccData.forEach((yearData: any) => {
-    yearData.materials.forEach((material: any) => {
-      allMaterials.add(material.name)
-    })
+    const items = isHvac ? yearData.systems : yearData.materials
+    if (items) {
+      items.forEach((item: any) => {
+        allItems.add(item.name)
+      })
+    }
   })
 
-  const materialColors = [
+  const itemColors = [
     '#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6',
     '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'
   ]
 
-  const datasets = Array.from(allMaterials).map((materialName, index) => ({
-    label: materialName as string,
+  const datasets = Array.from(allItems).map((itemName, index) => ({
+    label: itemName as string,
     data: lccData.map((yearData: any) => {
-      const material = yearData.materials.find((m: any) => m.name === materialName)
-      if (!material) return 0
+      const items = isHvac ? yearData.systems : yearData.materials
+      const item = items ? items.find((i: any) => i.name === itemName) : null
+      if (!item) return 0
       // Use showPerM2 toggle to determine which field to use
-      return showPerM2.value ? (material.cost_per_m2 || 0) : (material.cost || material.total_cost || 0)
+      if (isHvac) {
+        return showPerM2.value ? (item.cost_per_kw || 0) : (item.cost || item.total_cost || 0)
+      } else {
+        return showPerM2.value ? (item.cost_per_m2 || 0) : (item.cost || item.total_cost || 0)
+      }
     }),
-    backgroundColor: materialColors[index % materialColors.length],
-    borderColor: materialColors[index % materialColors.length],
+    backgroundColor: itemColors[index % itemColors.length],
+    borderColor: itemColors[index % itemColors.length],
     borderWidth: 1
   }))
 
@@ -373,7 +521,8 @@ const yearBasedLccChartData = computed(() => {
 
 // LCC chart options
 const lccChartOptions = computed(() => {
-  const unit = showPerM2.value ? '€/m²' : '€'
+  const isHvac = componentLevelData.value?.isHvac || false
+  const unit = showPerM2.value ? (isHvac ? '€/kW' : '€/m²') : '€'
   
   return {
     responsive: true,
@@ -385,7 +534,8 @@ const lccChartOptions = computed(() => {
       tooltip: {
         callbacks: {
           label: function(context: any) {
-            return `${context.dataset.label}: ${formatCurrency(context.parsed.y)} ${showPerM2.value ? '/m²' : ''}`
+            const unitSuffix = showPerM2.value ? (isHvac ? '/kW' : '/m²') : ''
+            return `${context.dataset.label}: ${formatCurrency(context.parsed.y)}${unitSuffix}`
           }
         }
       },
@@ -420,6 +570,7 @@ const yearBasedLcaChartData = computed(() => {
 
   const lcaByYear = componentLevelData.value.lca.byYear || {}
   const indicator = selectedIndicator.value
+  const isHvac = componentLevelData.value.isHvac
   
   // Get all years that have data for the selected indicator
   const yearsWithData = Object.keys(lcaByYear).filter(year => 
@@ -428,41 +579,47 @@ const yearBasedLcaChartData = computed(() => {
 
   if (yearsWithData.length === 0) return null
 
-  // Get all unique materials across all years for this indicator
-  const allMaterials = new Set()
+  // Get all unique materials/systems across all years for this indicator
+  const allItems = new Set()
   yearsWithData.forEach(year => {
-    lcaByYear[year].indicators[indicator].materials.forEach((material: any) => {
-      allMaterials.add(material.name)
-    })
+    const yearData = lcaByYear[year].indicators[indicator]
+    const items = isHvac ? yearData.systems : yearData.materials
+    if (items) {
+      items.forEach((item: any) => {
+        allItems.add(item.name)
+      })
+    }
   })
 
-  const materialColors = [
+  const itemColors = [
     '#10B981', '#EF4444', '#3B82F6', '#F59E0B', '#8B5CF6',
     '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'
   ]
 
-  const datasets = Array.from(allMaterials).map((materialName, index) => ({
-    label: materialName as string,
+  const datasets = Array.from(allItems).map((itemName, index) => ({
+    label: itemName as string,
     data: yearsWithData.map(year => {
       const yearData = lcaByYear[year].indicators[indicator]
-      const materials = yearData.materials.filter((m: any) => m.name === materialName)
+      const items = isHvac ? yearData.systems : yearData.materials
+      const itemsFiltered = items ? items.filter((i: any) => i.name === itemName) : []
       
-      // Sum up values for the same material in the same year (in case there are multiple entries)
-      const totalValue = materials.reduce((sum: number, material: any) => {
-        // Use total_value when not per m², scaled_value_dynamic when per m²
-        const value = showPerM2.value ? (material.scaled_value_dynamic || 0) : (material.total_value || 0)
+      // Sum up values for the same material/system in the same year (in case there are multiple entries)
+      const totalValue = itemsFiltered.reduce((sum: number, item: any) => {
+        // Use total_value when not per unit, scaled_value_dynamic when per unit
+        const value = showPerM2.value ? (item.scaled_value_dynamic || 0) : (item.total_value || 0)
         return sum + value
       }, 0)
       
       return totalValue
     }),
-    backgroundColor: materialColors[index % materialColors.length],
-    borderColor: materialColors[index % materialColors.length],
+    backgroundColor: itemColors[index % itemColors.length],
+    borderColor: itemColors[index % itemColors.length],
     borderWidth: 1,
     // Store additional data for tooltips
     materialData: yearsWithData.map(year => {
       const yearData = lcaByYear[year].indicators[indicator]
-      return yearData.materials.filter((m: any) => m.name === materialName)
+      const items = isHvac ? yearData.systems : yearData.materials
+      return items ? items.filter((i: any) => i.name === itemName) : []
     })
   }))
 
@@ -475,7 +632,8 @@ const yearBasedLcaChartData = computed(() => {
 // LCA chart options
 const lcaChartOptions = computed(() => {
   const indicatorInfo = lcaIndicators.find(i => i.key === selectedIndicator.value)
-  const unit = showPerM2.value ? `${indicatorInfo?.unit}/m²` : indicatorInfo?.unit
+  const isHvac = componentLevelData.value?.isHvac || false
+  const unit = showPerM2.value ? `${indicatorInfo?.unit}${isHvac ? '/kW' : '/m²'}` : indicatorInfo?.unit
 
   return {
     responsive: true,
@@ -496,14 +654,14 @@ const lcaChartOptions = computed(() => {
             const dataIndex = context.dataIndex
             
             if (dataset.materialData && dataset.materialData[dataIndex]) {
-              const materials = dataset.materialData[dataIndex]
-              if (materials.length > 0) {
+              const items = dataset.materialData[dataIndex]
+              if (items.length > 0) {
                 const additionalInfo: string[] = []
-                materials.forEach((material: any) => {
-                  additionalInfo.push(`Modul: ${material.module}`)
+                items.forEach((item: any) => {
+                  additionalInfo.push(`Modul: ${item.module}`)
 
-                  if (material.cause) {
-                    additionalInfo.push(`Ursache: ${material.cause}`)
+                  if (item.cause) {
+                    additionalInfo.push(`Ursache: ${item.cause}`)
                   }
                 })
                 return additionalInfo
@@ -656,13 +814,14 @@ const exportData = () => {
               <SelectContent>
                 <SelectItem value="building">Gebäudeebene</SelectItem>
                 <SelectItem value="component">Bauteilebene</SelectItem>
+                <SelectItem value="system">Komponentenebene</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          <!-- Component Selection (only for component view) -->
-          <div v-if="viewMode === 'component'" class="space-y-2">
-            <Label>Bauteil</Label>
+          <!-- Component Selection (only for component and system view) -->
+          <div v-if="viewMode === 'component' || viewMode === 'system'" class="space-y-2">
+            <Label>{{ viewMode === 'component' ? 'Bauteil' : 'Komponente' }}</Label>
             <Select v-model="selectedComponent">
               <SelectTrigger>
                 <SelectValue />
@@ -706,7 +865,7 @@ const exportData = () => {
             v-model="showPerM2"
           />
           <Label for="per-m2-toggle" class="text-sm">
-            Pro m² anzeigen
+            {{ (viewMode === 'system' && componentLevelData?.isHvac) ? 'Pro kW anzeigen' : 'Pro m² anzeigen' }}
           </Label>
         </div>
       </CardContent>
@@ -853,14 +1012,32 @@ const exportData = () => {
     </div>
 
     <!-- Component Level View -->
-    <div v-else-if="viewMode === 'component' && componentLevelData" class="space-y-6">
+    <div v-else-if="(viewMode === 'component' || viewMode === 'system') && componentLevelData" class="space-y-6">
       <!-- Component Summary -->
       <Card>
         <CardHeader>
           <CardTitle>{{ getComponentLabel(selectedComponent) }} - Übersicht</CardTitle>
         </CardHeader>
         <CardContent>
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+          <div v-if="componentLevelData.isHvac" class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div>
+              <div class="text-muted-foreground">Leistungsbedarf</div>
+              <div class="font-medium">{{ formatNumber(componentLevelData.summary?.power_requirement, 1) }} kW</div>
+            </div>
+            <div v-if="activeTab === 'lcc'">
+              <div class="text-muted-foreground">Gesamtkosten</div>
+              <div class="font-medium">{{ formatCurrency(componentLevelData.summary?.total_cost_euro) }}</div>
+            </div>
+            <div v-if="activeTab === 'lcc'">
+              <div class="text-muted-foreground">Kosten pro kW</div>
+              <div class="font-medium">{{ formatCurrency(componentLevelData.summary?.cost_per_kw_euro) }}/kW</div>
+            </div>
+            <div>
+              <div class="text-muted-foreground">Installationsjahr</div>
+              <div class="font-medium">{{ componentLevelData.summary?.installation_year || 'N/A' }}</div>
+            </div>
+          </div>
+          <div v-else class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
             <div>
               <div class="text-muted-foreground">Fläche</div>
               <div class="font-medium">{{ formatNumber(componentLevelData.summary?.area_m2, 1) }} m²</div>
@@ -884,10 +1061,10 @@ const exportData = () => {
       <!-- LCC Timeline Chart -->
       <Card v-if="activeTab === 'lcc'">
         <CardHeader>
-          <CardTitle>Kostenentwicklung über Lebenszyklus (gestapelt nach Materialien)</CardTitle>
+          <CardTitle>Kostenentwicklung über Lebenszyklus (gestapelt nach {{ componentLevelData.isHvac ? 'Systemen' : 'Materialien' }})</CardTitle>
           <CardDescription>
-            Materialkosten aufgeschlüsselt nach Jahren und Materialien 
-            {{ showPerM2 ? '(pro m²)' : '(Gesamtwerte)' }}
+            {{ componentLevelData.isHvac ? 'Systemkosten' : 'Materialkosten' }} aufgeschlüsselt nach Jahren und {{ componentLevelData.isHvac ? 'Systemen' : 'Materialien' }}
+            {{ showPerM2 ? (componentLevelData.isHvac ? '(pro kW)' : '(pro m²)') : '(Gesamtwerte)' }}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -904,10 +1081,10 @@ const exportData = () => {
       <!-- LCA Materials Chart by Year -->
       <Card v-if="activeTab === 'lca'">
         <CardHeader>
-          <CardTitle>{{ lcaIndicators.find(i => i.key === selectedIndicator)?.label }} nach Materialien und Jahren</CardTitle>
+          <CardTitle>{{ lcaIndicators.find(i => i.key === selectedIndicator)?.label }} nach {{ componentLevelData.isHvac ? 'Systemen' : 'Materialien' }} und Jahren</CardTitle>
           <CardDescription>
-            Umweltauswirkungen gestapelt nach Jahren und Materialien 
-            {{ showPerM2 ? '(pro m²)' : '(Gesamtwerte)' }}
+            Umweltauswirkungen gestapelt nach Jahren und {{ componentLevelData.isHvac ? 'Systemen' : 'Materialien' }}
+            {{ showPerM2 ? (componentLevelData.isHvac ? '(pro kW)' : '(pro m²)') : '(Gesamtwerte)' }}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -922,7 +1099,7 @@ const exportData = () => {
       </Card>
 
       <!-- Construction Layers Visualization -->
-      <Card>
+      <Card v-if="!componentLevelData.isHvac && selectedComponent !== 'window'">
         <CardHeader>
           <CardTitle>{{ getComponentLabel(selectedComponent) }} - Schichtaufbau</CardTitle>
           <CardDescription>Visualisierung der Konstruktionsschichten mit Dimensionen</CardDescription>
