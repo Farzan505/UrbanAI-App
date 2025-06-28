@@ -328,7 +328,7 @@ const exportData = () => {
       <div>
         <h2 class="text-2xl font-bold tracking-tight">Energieanalyse</h2>
         <p class="text-muted-foreground">
-          3D-Visualisierung und Energiebedarfsvergleich für Status Quo und Sanierungsszenario
+          Energiebedarfsvergleich für Status Quo und Sanierungsszenario
         </p>
       </div>
       

@@ -151,8 +151,8 @@ watch(viewMode, (newMode) => {
   if (newMode === 'system' && results.hvac) {
     selectedComponent.value = 'hvac'
   } else if (newMode === 'component') {
-    // Set to first available building component
-    const buildingComponents = Object.keys(results).filter(key => key !== 'hvac')
+    // Show only building components (excluding hvac and hvac_skipped)
+    const buildingComponents = Object.keys(results).filter(key => key !== 'hvac' && key !== 'hvac_skipped')
     if (buildingComponents.length > 0) {
       selectedComponent.value = buildingComponents[0]
     }
@@ -165,8 +165,8 @@ const availableComponents = computed(() => {
   if (!results) return []
   
   if (viewMode.value === 'component') {
-    // Show only building components (excluding hvac)
-    const buildingComponents = Object.keys(results).filter(key => key !== 'hvac')
+    // Show only building components (excluding hvac and hvac_skipped)
+    const buildingComponents = Object.keys(results).filter(key => key !== 'hvac' && key !== 'hvac_skipped')
     return buildingComponents.map(key => ({
       key,
       label: getComponentLabel(key),
@@ -1274,7 +1274,8 @@ const resetConstructionSelections = () => {
             v-model="showPerM2"
           />
           <Label for="per-m2-toggle" class="text-sm">
-            {{ (viewMode === 'system' && componentLevelData?.isHvac) ? 'Pro kW anzeigen' : 'Pro m² anzeigen' }}
+            {{ (viewMode === 'system' && componentLevelData?.isHvac) ? 'Pro kW Leistung anzeigen' : 
+               (viewMode === 'building') ? 'Pro m² NGF anzeigen' : 'Pro m² Bauteilfläche anzeigen' }}
           </Label>
         </div>
       </CardContent>

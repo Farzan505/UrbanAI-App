@@ -141,6 +141,10 @@ const selectedCo2CostScenario = ref('0% reine Zeitpräferenzrate') // Default va
 const isLoadingCo2Scenarios = ref(false)
 const co2ScenariosError = ref('')
 
+// Temporary state for settings dialog (before saving)
+const tempSelectedCo2PathScenario = ref('KSG')
+const tempSelectedCo2CostScenario = ref('0% reine Zeitpräferenzrate')
+
 // Interface for the API response
 interface BuildingDataResponse {
   gebid: string
@@ -781,12 +785,12 @@ const buildingSurfaceAreas = computed(() => {
     
     // German translations for surface types
     const surfaceLabels: { [key: string]: string } = {
-      'buildingwallsurface_area': 'Außenwandfläche',
+      'buildingwallsurface_area': 'Außenwandfläche (inkl. Fenster)',
       'buildingroofsurface_area': 'Dachfläche', 
       'buildinggroundsurface_area': 'Bodenfläche',
       'buildingwindowsurface_area': 'Fensterfläche',
-      'buildingwallsurface_adiabatic_area': 'Außenwandfläche (gemeinsame Flächen)',
-      'buildingwallsurface_nonadiabatic_area': 'Außenwandfläche (nicht gemeinsame Flächen)',
+      'buildingwallsurface_adiabatic_area': 'Außenwandfläche (gemeinsame Flächen inkl. Fenster)',
+      'buildingwallsurface_nonadiabatic_area': 'Außenwandfläche (nicht gemeinsame Flächen inkl. Fenster)',
       'total_bgf': 'Bruttogrundfläche',
       'total_ngf': 'Nettogrundfläche',
       'total_built_area': 'Bebaute Fläche'
@@ -1033,8 +1037,11 @@ const formatDisplayValue = (value: any) => {
 // Translate field names to German for better UX
 const translateFieldName = (fieldName: string): string => {
   const fieldTranslations: { [key: string]: string } = {
-    'verxxh': 'Verbrauchsabrechnung',
-    'epl': 'Energieausweis',
+    'verxxh': 'Wärmeversorgung',
+    'bajahr': 'Baujahr',
+    'epl': 'Einzelpan',
+    'bgf': 'Bruttogrundfläche',
+    'ngf': 'Nettogrundfläche',
     'babez': 'Baualtersklasse',
     'ligbez': 'Liegenschaftsbezeichnung',
     'gebzabt': 'Gebäudezuordnung',
@@ -1123,9 +1130,11 @@ const fetchCo2Scenarios = async () => {
     // Set defaults if not already set
     if (!selectedCo2PathScenario.value && co2PathScenarios.value.length > 0) {
       selectedCo2PathScenario.value = co2PathScenarios.value[0]
+      tempSelectedCo2PathScenario.value = co2PathScenarios.value[0] // Initialize temp state
     }
     if (!selectedCo2CostScenario.value && co2CostScenarios.value.length > 0) {
       selectedCo2CostScenario.value = co2CostScenarios.value[0]
+      tempSelectedCo2CostScenario.value = co2CostScenarios.value[0] // Initialize temp state
     }
 
     console.log('✅ Updated CO2 scenarios:', {
@@ -1182,6 +1191,95 @@ const missingDataCount = computed(() => {
 const isDataComplete = computed(() => {
   return missingData.value.length === 0
 })
+
+// Handle opening settings sheet
+const openSettingsSheet = () => {
+  try {
+    // Copy current values to temporary state
+    tempSelectedCo2PathScenario.value = selectedCo2PathScenario.value
+    tempSelectedCo2CostScenario.value = selectedCo2CostScenario.value
+    isSettingsOpen.value = true
+  } catch (err) {
+    console.error('Error opening settings sheet:', err)
+  }
+}
+
+// Handle saving settings
+const saveSettings = () => {
+  try {
+    // Apply temporary values to actual state
+    selectedCo2PathScenario.value = tempSelectedCo2PathScenario.value
+    selectedCo2CostScenario.value = tempSelectedCo2CostScenario.value
+    
+    isSettingsOpen.value = false
+    
+    // Show success message
+    toast.success('Einstellungen gespeichert', {
+      description: 'Die CO2-Szenarien wurden erfolgreich aktualisiert.'
+    })
+    
+    // Trigger re-analysis if building data is available
+    if (buildingData.value && geometryData.value) {
+      if (retrofitScenario.value) {
+        // Re-run retrofit analysis with new CO2 scenarios
+        analyzeRetrofitScenario(
+          buildingData.value,
+          geometryData.value,
+          retrofitScenario.value,
+          selectedCo2PathScenario.value,
+          selectedCo2CostScenario.value,
+          getHVACOptions.value
+        ).catch(err => {
+          console.error('❌ Re-analysis after settings change failed:', err)
+        })
+      } else {
+        // Re-run base analysis with new CO2 scenarios
+        analyzeBaseScenario(
+          buildingData.value,
+          geometryData.value,
+          co2PathScenarios.value,
+          co2CostScenarios.value,
+          selectedCo2PathScenario.value,
+          selectedCo2CostScenario.value
+        ).catch(err => {
+          console.error('❌ Re-analysis after settings change failed:', err)
+        })
+      }
+    }
+  } catch (err) {
+    console.error('Error saving settings:', err)
+    toast.error('Fehler beim Speichern', {
+      description: 'Die Einstellungen konnten nicht gespeichert werden.'
+    })
+  }
+}
+
+// Handle canceling settings
+const cancelSettings = () => {
+  try {
+    // Reset temporary values to current state
+    tempSelectedCo2PathScenario.value = selectedCo2PathScenario.value
+    tempSelectedCo2CostScenario.value = selectedCo2CostScenario.value
+    isSettingsOpen.value = false
+  } catch (err) {
+    console.error('Error canceling settings:', err)
+  }
+}
+
+// Handle resetting settings to defaults
+const resetSettings = () => {
+  try {
+    // Reset to default values
+    tempSelectedCo2PathScenario.value = co2PathScenarios.value.length > 0 ? co2PathScenarios.value[0] : 'KSG'
+    tempSelectedCo2CostScenario.value = co2CostScenarios.value.length > 0 ? co2CostScenarios.value[0] : '0% reine Zeitpräferenzrate'
+    
+    toast.info('Einstellungen zurückgesetzt', {
+      description: 'Die CO₂-Szenarien wurden auf die Standardwerte zurückgesetzt.'
+    })
+  } catch (err) {
+    console.error('Error resetting settings:', err)
+  }
+}
 </script>
 
 <template>
@@ -1809,77 +1907,99 @@ const isDataComplete = computed(() => {
               <!-- Einstellungen Button (visible in all tabs) -->
               <Sheet :open="isSettingsOpen" @update:open="isSettingsOpen = $event">
                 <SheetTrigger as-child>
-                  <Button variant="outline" size="sm" class="flex items-center space-x-2">
+                  <Button variant="outline" size="sm" class="flex items-center space-x-2" @click="openSettingsSheet">
                     <Settings class="h-4 w-4" />
                     <span>Einstellungen</span>
                   </Button>
                 </SheetTrigger>
                 
-                <SheetContent side="right" class="w-[400px]">
+                <SheetContent side="right" class="w-[400px] flex flex-col">
                   <SheetHeader>
                     <SheetTitle>Einstellungen</SheetTitle>
                     <SheetDescription>
-                      Konfigurieren Sie die CO2-Reduktions- und Kostenszenarien für die Analyse.
+                      Konfigurieren Sie Szenarien für die Analyse.
                     </SheetDescription>
                   </SheetHeader>
                   
-                  <div class="space-y-6 py-4">
-                    <!-- Error Message -->
-                    <div v-if="co2ScenariosError" class="bg-red-50 border border-red-200 rounded-md p-3">
-                      <p class="text-sm text-red-600">{{ co2ScenariosError }}</p>
-                    </div>
-                    
-                    <!-- Loading State -->
-                    <div v-if="isLoadingCo2Scenarios" class="space-y-4">
-                      <Skeleton class="h-4 w-full" />
-                      <Skeleton class="h-10 w-full" />
-                      <Skeleton class="h-4 w-full" />
-                      <Skeleton class="h-10 w-full" />
-                    </div>
-                    
-                    <!-- CO2 Path Scenario Selection -->
-                    <div v-else class="space-y-2">
-                      <Label for="co2-path-scenario">CO2-Reduktionsszenario</Label>
-                      <Select v-model="selectedCo2PathScenario">
-                        <SelectTrigger id="co2-path-scenario">
-                          <SelectValue placeholder="Wählen Sie ein Reduktionsszenario..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem
-                            v-for="scenario in co2PathScenarios"
-                            :key="scenario"
-                            :value="scenario"
-                          >
-                            {{ scenario }}
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <!-- CO2 Cost Scenario Selection -->
-                    <div class="space-y-2">
-                      <Label for="co2-cost-scenario">CO2-Kostenszenario</Label>
-                      <Select v-model="selectedCo2CostScenario">
-                        <SelectTrigger id="co2-cost-scenario">
-                          <SelectValue placeholder="Wählen Sie ein Kostenszenario..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem
-                            v-for="scenario in co2CostScenarios"
-                            :key="scenario"
-                            :value="scenario"
-                          >
-                            {{ scenario }}
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
+                  <!-- Scrollable Content Area -->
+                  <div class="flex-1 overflow-y-auto py-4">
+                    <div class="space-y-6">
+                      <!-- Error Message -->
+                      <div v-if="co2ScenariosError" class="bg-red-50 border border-red-200 rounded-md p-3">
+                        <p class="text-sm text-red-600">{{ co2ScenariosError }}</p>
+                      </div>
+                      
+                      <!-- Loading State -->
+                      <div v-if="isLoadingCo2Scenarios" class="space-y-4">
+                        <Skeleton class="h-4 w-full" />
+                        <Skeleton class="h-10 w-full" />
+                        <Skeleton class="h-4 w-full" />
+                        <Skeleton class="h-10 w-full" />
+                      </div>
+                      
+                      <!-- CO2 Path Scenario Selection -->
+                      <div v-else class="space-y-2">
+                        <Label for="co2-path-scenario">Reduktionspfad</Label>
+                        <Select v-model="tempSelectedCo2PathScenario">
+                          <SelectTrigger id="co2-path-scenario">
+                            <SelectValue placeholder="Wählen Sie ein Reduktionsszenario..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem
+                              v-for="scenario in co2PathScenarios"
+                              :key="scenario"
+                              :value="scenario"
+                            >
+                              {{ scenario }}
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <!-- CO2 Cost Scenario Selection -->
+                      <div class="space-y-2">
+                        <Label for="co2-cost-scenario">Vermeidungskosten</Label>
+                        <Select v-model="tempSelectedCo2CostScenario">
+                          <SelectTrigger id="co2-cost-scenario">
+                            <SelectValue placeholder="Wählen Sie ein Kostenszenario..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem
+                              v-for="scenario in co2CostScenarios"
+                              :key="scenario"
+                              :value="scenario"
+                            >
+                              {{ scenario }}
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                   </div>
                   
-                  <SheetFooter>
-                    <Button @click="isSettingsOpen = false">
-                      Schließen
-                    </Button>
+                  <SheetFooter class="mt-4 border-t pt-4">
+                    <div class="flex space-x-2 w-full">
+                      <Button 
+                        variant="outline" 
+                        @click="resetSettings"
+                        class="flex-1"
+                      >
+                        Zurücksetzen
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        @click="cancelSettings"
+                        class="flex-1"
+                      >
+                        Abbrechen
+                      </Button>
+                      <Button 
+                        @click="saveSettings"
+                        class="flex-1"
+                      >
+                        Speichern
+                      </Button>
+                    </div>
                   </SheetFooter>
                 </SheetContent>
               </Sheet>
