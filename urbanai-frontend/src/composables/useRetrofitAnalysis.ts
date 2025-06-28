@@ -310,12 +310,22 @@ export function useRetrofitAnalysis() {
       retrofitAnalysisError.value = ''
       retrofitAnalysisResult.value = null
 
+      // ✅ STANDARDIZED DATA EXTRACTION - Same as other functions
       const assumptions = buildingData.buildings_assumptions
       const gebplz = assumptions.gebplz
-      const gmlIds = buildingData.gmlid_gebid_mapping.map((mapping: GmlMapping) => mapping.gmlid)
+      const gmlIds = buildingData.gmlid_gebid_mapping?.map((mapping: GmlMapping) => mapping.gmlid) || []
       
       const actualBuildingCategory = getBuildingCategory(assumptions)
       const actualConstructionYear = parseConstructionYear(assumptions?.construction_year)
+      
+      console.log('🔍 Base scenario data validation:', {
+        building_id: assumptions.building_id,
+        gebplz: gebplz,
+        building_category: actualBuildingCategory,
+        construction_year: actualConstructionYear,
+        gmlIds_count: gmlIds.length,
+        gmlIds: gmlIds
+      })
       
       // Extract and preserve the results data properly
       const geometryResults = cleanGeometryData(geometryData)
@@ -341,21 +351,8 @@ export function useRetrofitAnalysis() {
 
       console.log('📤 Sending base scenario payload:', payload)
 
-
-      // Debug each key individually before JSON.stringify
-      Object.keys(payload.geometry_data || {}).forEach(key => {
-        console.log(`📤 GEOMETRY_DATA[${key}]:`, typeof payload.geometry_data[key], payload.geometry_data[key])
-        try {
-          const serialized = safeJSONStringify(payload.geometry_data[key])
-
-        } catch (e) {
-          console.error(`📤 GEOMETRY_DATA[${key}] safeJSONStringify ERROR:`, e)
-        }
-      })
-
       // Log the complete request payload being sent
       const requestBody = safeJSONStringify(payload)
-
 
       const response = await fetch(`${apiBaseUrl.value}/api/energy/analyze-retrofit`, {
         method: 'POST',
@@ -386,15 +383,6 @@ export function useRetrofitAnalysis() {
 
       const data = await response.json()
       console.log('✅ Base scenario analysis response:', data)
-      
-      // Debug: Check if the response contains the original geometry_data structure
-      if (data && data.geometry_data) {
-        console.log('📥 RESPONSE geometry_data keys:', Object.keys(data.geometry_data || {}))
-        console.log('📥 RESPONSE geometry_data type:', typeof data.geometry_data)
-        console.log('📥 RESPONSE geometry_data sample:', data.geometry_data)
-      } else {
-        console.log('📥 RESPONSE does not contain geometry_data field')
-      }
       
       retrofitAnalysisResult.value = data
       console.log('🎯 Base scenario analysis completed successfully')
@@ -451,28 +439,27 @@ export function useRetrofitAnalysis() {
         throw new Error(`Ungültige Postleitzahl: ${gebplz}. Mindestens 5 Zeichen erforderlich.`)
       }
 
+      // ✅ STANDARDIZED DATA EXTRACTION - Same as other functions
       const gmlIds = buildingData.gmlid_gebid_mapping?.map((mapping: GmlMapping) => mapping.gmlid) || []
       
       const actualBuildingCategory = getBuildingCategory(assumptions)
-      const actualConstructionYear = parseConstructionYear(assumptions?.epl)
+      const actualConstructionYear = parseConstructionYear(assumptions?.construction_year) // ✅ FIXED: Use construction_year not epl
       
-      // Extract and preserve the results data properly
-      const geometryResults = cleanGeometryData(geometryData)
-      
-
-      // Validate serialization before sending
-      validateGeometryDataSerialization(geometryResults, 'for construction analysis')
-
       console.log('🏗️ Construction analysis data validation:', {
-        building_id: assumptions.gebid,
+        building_id: assumptions.building_id, // ✅ FIXED: Use building_id not gebid
         gebplz: gebplz,
         gebplz_length: gebplz.length,
         building_category: actualBuildingCategory,
         construction_year: actualConstructionYear,
         gmlIds_count: gmlIds.length,
-        assumptions_keys: Object.keys(assumptions),
-        full_assumptions: assumptions
+        gmlIds: gmlIds
       })
+      
+      // Extract and preserve the results data properly
+      const geometryResults = cleanGeometryData(geometryData)
+
+      // Validate serialization before sending
+      validateGeometryDataSerialization(geometryResults, 'for construction analysis')
 
       const payload = buildRetrofitPayload(
         buildingData,
@@ -570,22 +557,26 @@ export function useRetrofitAnalysis() {
       retrofitAnalysisError.value = ''
       retrofitAnalysisResult.value = null
 
+      // ✅ STANDARDIZED DATA EXTRACTION - Same as other functions
       const assumptions = buildingData.buildings_assumptions
-      const gebplz = assumptions.gebid?.split(' ')[0] || ''
-      const gmlIds = buildingData.gmlid_gebid_mapping.map((mapping: GmlMapping) => mapping.gmlid)
+      const gebplz = assumptions.gebplz // ✅ FIXED: Use gebplz directly not gebid.split()
+      const gmlIds = buildingData.gmlid_gebid_mapping?.map((mapping: GmlMapping) => mapping.gmlid) || [] // ✅ FIXED: Add null check
 
-      const selectedHVACItem = retrofitScenario?.hvac 
-        ? getHVACOptions.find(item => item.hvac_number === retrofitScenario?.hvac?.hvac_number)
-        : null
-
-      const systemType = mapToSystemType(retrofitScenario?.hvac?.hvac_type)
       const actualBuildingCategory = getBuildingCategory(assumptions)
-      const actualConstructionYear = parseConstructionYear(assumptions?.epl)
+      const actualConstructionYear = parseConstructionYear(assumptions?.construction_year) // ✅ FIXED: Use construction_year not epl
+      
+      console.log('🔍 Retrofit scenario data validation:', {
+        building_id: assumptions.building_id,
+        gebplz: gebplz,
+        building_category: actualBuildingCategory,
+        construction_year: actualConstructionYear,
+        gmlIds_count: gmlIds.length,
+        gmlIds: gmlIds,
+        retrofitScenario: retrofitScenario
+      })
       
       // Extract and preserve the results data properly
       const geometryResults = cleanGeometryData(geometryData)
-
-
 
       // Validate serialization before sending
       validateGeometryDataSerialization(geometryResults, 'for retrofit scenario')
