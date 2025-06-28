@@ -516,7 +516,25 @@ export function useRetrofitAnalysis() {
       const data = await response.json()
       console.log('✅ Construction analysis response:', data)
       
+      // Debug the exact structure of the response
+      console.log('🔍 Response structure analysis:', {
+        hasData: !!data.data,
+        dataKeys: data.data ? Object.keys(data.data) : null,
+        hasLcaLccResults: !!data.data?.lca_lcc_results,
+        hasSummary: !!data.data?.summary,
+        lcaLccKeys: data.data?.lca_lcc_results ? Object.keys(data.data.lca_lcc_results) : null,
+        summaryKeys: data.data?.summary ? Object.keys(data.data.summary) : null,
+        fullDataStructure: data.data
+      })
+      
       retrofitAnalysisResult.value = data
+      
+      // Debug what was actually stored
+      console.log('🔍 Stored retrofitAnalysisResult:', {
+        hasValue: !!retrofitAnalysisResult.value,
+        hasData: !!retrofitAnalysisResult.value?.data,
+        storedDataKeys: retrofitAnalysisResult.value?.data ? Object.keys(retrofitAnalysisResult.value.data) : null
+      })
 
       toast.success('Konstruktionsanalyse erfolgreich', {
         description: 'Die Lebenszyklusanalyse wurde mit den ausgewählten Konstruktionen durchgeführt.'

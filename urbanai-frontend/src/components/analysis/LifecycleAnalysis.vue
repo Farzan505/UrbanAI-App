@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -13,7 +13,6 @@ import { Bar } from 'vue-chartjs'
 import { Chart as ChartJS, Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale, PointElement, LineElement } from 'chart.js'
 import { Building, Layers, Euro, Leaf, Download, Settings, Plus, X, AlertTriangle } from 'lucide-vue-next'
 import { useConstructionData } from '@/composables/useConstructionData'
-import { useRetrofitAnalysis } from '@/composables/useRetrofitAnalysis'
 import { toast } from 'vue-sonner'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { Input } from '@/components/ui/input'
@@ -52,6 +51,15 @@ interface Props {
   getValidationMessage?: string
   constructionSummary?: string
   isDeleteDialogOpen?: boolean
+  // Analysis function from parent
+  analyzeWithConstructionsFunction?: (
+    buildingData: any,
+    geometryData: any,
+    constructionSelections: any,
+    selectedCo2PathScenario: string,
+    selectedCo2CostScenario: string,
+    retrofitScenario?: any
+  ) => Promise<any>
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -82,7 +90,9 @@ const props = withDefaults(defineProps<Props>(), {
   isScenarioValid: false,
   getValidationMessage: '',
   constructionSummary: '',
-  isDeleteDialogOpen: false
+  isDeleteDialogOpen: false,
+  // Analysis function from parent
+  analyzeWithConstructionsFunction: undefined
 })
 
 // Emit events to parent
@@ -117,17 +127,20 @@ const {
   getConstructionOptions
 } = useConstructionData()
 
-// Use retrofit analysis composable
-const {
-  analyzeWithConstructions: performConstructionAnalysis
-} = useRetrofitAnalysis()
-
 // Use real data from API response
 const effectiveLcaLccResults = computed(() => {
+  console.log('🔄 effectiveLcaLccResults computed recalculated:', {
+    hasResults: !!props.lcaLccResults,
+    keys: props.lcaLccResults ? Object.keys(props.lcaLccResults) : []
+  })
   return props.lcaLccResults
 })
 
 const effectiveSummaryData = computed(() => {
+  console.log('🔄 effectiveSummaryData computed recalculated:', {
+    hasSummary: !!props.summaryData,
+    keys: props.summaryData ? Object.keys(props.summaryData) : []
+  })
   return props.summaryData
 })
 
@@ -137,6 +150,37 @@ const viewMode = ref('building') // 'building', 'component', or 'system'
 const selectedComponent = ref('facade') // 'facade', 'roof', 'base', 'window', 'hvac'
 const selectedIndicator = ref('gwptotal_a2') // for LCA
 const showPerM2 = ref(false) // toggle between total and per m²
+
+// Watch for prop changes to ensure reactivity
+watch(() => props.lcaLccResults, (newResults, oldResults) => {
+  console.log('🔄 LCA/LCC Results prop changed:', {
+    hasNew: !!newResults,
+    hasOld: !!oldResults,
+    newKeys: newResults ? Object.keys(newResults) : [],
+    oldKeys: oldResults ? Object.keys(oldResults) : []
+  })
+  
+  // Reset component selection when new data arrives
+  if (newResults && Object.keys(newResults).length > 0) {
+    if (viewMode.value === 'component') {
+      const buildingComponents = Object.keys(newResults).filter(key => key !== 'hvac' && key !== 'hvac_skipped')
+      if (buildingComponents.length > 0 && !buildingComponents.includes(selectedComponent.value)) {
+        selectedComponent.value = buildingComponents[0]
+      }
+    } else if (viewMode.value === 'system' && newResults.hvac) {
+      selectedComponent.value = 'hvac'
+    }
+  }
+}, { deep: true })
+
+watch(() => props.summaryData, (newSummary, oldSummary) => {
+  console.log('🔄 Summary Data prop changed:', {
+    hasNew: !!newSummary,
+    hasOld: !!oldSummary,
+    newKeys: newSummary ? Object.keys(newSummary) : [],
+    oldKeys: oldSummary ? Object.keys(oldSummary) : []
+  })
+}, { deep: true })
 
 // Watch for view mode changes to set appropriate default component
 watch(viewMode, (newMode) => {
@@ -341,6 +385,13 @@ const buildingLevelData = computed(() => {
 // Computed data for component-level detail
 const componentLevelData = computed(() => {
   const results = effectiveLcaLccResults.value
+  console.log('🔄 componentLevelData computed recalculated:', {
+    hasResults: !!results,
+    selectedComponent: selectedComponent.value,
+    resultsKeys: results ? Object.keys(results) : [],
+    hasComponentData: results && selectedComponent.value ? !!results[selectedComponent.value] : false
+  })
+  
   if (!results || !selectedComponent.value) return null
 
   const componentData = results[selectedComponent.value]
@@ -562,6 +613,13 @@ const componentLevelData = computed(() => {
 
 // Chart data for building comparison
 const buildingComparisonChartData = computed(() => {
+  console.log('🔄 buildingComparisonChartData computed recalculated:', {
+    hasBuildingData: !!buildingLevelData.value,
+    activeTab: activeTab.value,
+    showPerM2: showPerM2.value,
+    selectedIndicator: selectedIndicator.value
+  })
+  
   if (!buildingLevelData.value) return null
 
   const components = buildingLevelData.value.components
@@ -916,12 +974,17 @@ const analyzeWithConstructions = async () => {
     return
   }
 
+  if (!props.analyzeWithConstructionsFunction) {
+    toast.error('Analysefunktion nicht verfügbar')
+    return
+  }
+
   try {
     isAnalyzingWithConstructions.value = true
     constructionAnalysisError.value = ''
 
-    // Use the composable function with retrofit scenario data
-    const data = await performConstructionAnalysis(
+    // Use the analysis function passed from parent
+    const data = await props.analyzeWithConstructionsFunction(
       props.buildingData,
       props.geometryData,
       constructionSelections,
@@ -930,14 +993,22 @@ const analyzeWithConstructions = async () => {
       props.retrofitScenario // Include retrofit scenario data
     )
     
-    // Note: The new data will be passed via props from the parent component
-    // after the analysis is complete
-
+    console.log('✅ Construction analysis completed via parent function:', data)
+    
+    // Close the sheet
     isConstructionSheetOpen.value = false
+
+    toast.success('Konstruktionsanalyse erfolgreich', {
+      description: 'Die Lebenszyklusanalyse wurde mit den ausgewählten Konstruktionen durchgeführt.'
+    })
 
   } catch (err) {
     console.error('❌ Construction analysis error:', err)
     constructionAnalysisError.value = err instanceof Error ? err.message : 'Unbekannter Fehler'
+    
+    toast.error('Konstruktionsanalyse fehlgeschlagen', {
+      description: constructionAnalysisError.value
+    })
   } finally {
     isAnalyzingWithConstructions.value = false
   }
@@ -954,10 +1025,61 @@ const resetConstructionSelections = () => {
 const hasEnvelopeRenovation = computed(() => {
   return props.retrofitScenario?.energy_standard && props.retrofitScenario?.construction_year
 })
+
+watch(() => props.isLoading, (newLoading, oldLoading) => {
+  console.log('🔄 Loading state changed:', {
+    from: oldLoading,
+    to: newLoading,
+    hasLcaResults: !!props.lcaLccResults,
+    hasSummaryData: !!props.summaryData
+  })
+})
+
+// Force reactivity by creating a computed key based on data
+const dataKey = computed(() => {
+  const lcaKey = props.lcaLccResults ? JSON.stringify(Object.keys(props.lcaLccResults).sort()) : 'no-lca'
+  const summaryKey = props.summaryData ? JSON.stringify(Object.keys(props.summaryData).sort()) : 'no-summary'
+  const key = `${lcaKey}-${summaryKey}`
+  console.log('🔄 dataKey computed:', { lcaKey, summaryKey, finalKey: key })
+  return key
+})
+
+// Add a watcher to force chart updates when data changes
+watch([() => props.lcaLccResults, () => props.summaryData], ([newLca, newSummary], [oldLca, oldSummary]) => {
+  console.log('🔄 Props changed - analyzing data:', {
+    lcaChanged: newLca !== oldLca,
+    summaryChanged: newSummary !== oldSummary,
+    newLcaKeys: newLca ? Object.keys(newLca) : [],
+    newSummaryKeys: newSummary ? Object.keys(newSummary) : [],
+    oldLcaKeys: oldLca ? Object.keys(oldLca) : [],
+    oldSummaryKeys: oldSummary ? Object.keys(oldSummary) : []
+  })
+  
+  // Only force update if data actually changed
+  if (newLca !== oldLca || newSummary !== oldSummary) {
+    console.log('🚨 Data has changed - checking content:', {
+      newLcaContent: newLca,
+      newSummaryContent: newSummary,
+      hasNewLcaData: !!newLca && Object.keys(newLca).length > 0,
+      hasNewSummaryData: !!newSummary && Object.keys(newSummary).length > 0
+    })
+    
+    // Force reactivity on next tick
+    nextTick(() => {
+      console.log('🔄 NextTick - checking computed states after data change:', {
+        effectiveLcaLccResults: !!effectiveLcaLccResults.value,
+        effectiveSummaryData: !!effectiveSummaryData.value,
+        buildingLevelData: !!buildingLevelData.value,
+        componentLevelData: !!componentLevelData.value,
+        buildingComparisonChartData: !!buildingComparisonChartData.value
+      })
+    })
+  }
+}, { deep: true, immediate: true })
 </script>
 
 <template>
-  <div class="w-full space-y-6">
+  <div class="w-full space-y-6" :key="dataKey">
     <!-- Header with controls -->
     <div class="flex items-center justify-between">
       <div>

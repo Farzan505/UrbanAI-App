@@ -108,7 +108,8 @@ const {
   retrofitAnalysisError, 
   retrofitAnalysisResult, 
   analyzeBaseScenario, 
-  analyzeRetrofitScenario 
+  analyzeRetrofitScenario,
+  analyzeWithConstructions
 } = useRetrofitAnalysis()
 
 const { 
@@ -1156,10 +1157,12 @@ const fetchCo2Scenarios = async () => {
 watch(retrofitAnalysisResult, (newValue) => {
   console.log('🔄 RetrofitAnalysisResult changed:', {
     hasValue: !!newValue,
-    hasFrontendData: !!newValue?.frontend_data,
-    frontendDataKeys: newValue?.frontend_data ? Object.keys(newValue.frontend_data) : null,
-    hasCards: !!newValue?.frontend_data?.cards,
-    cardsKeys: newValue?.frontend_data?.cards ? Object.keys(newValue.frontend_data.cards) : null,
+    hasData: !!newValue?.data,
+    dataKeys: newValue?.data ? Object.keys(newValue.data) : null,
+    hasLcaLccResults: !!newValue?.data?.lca_lcc_results,
+    hasSummary: !!newValue?.data?.summary,
+    lcaLccKeys: newValue?.data?.lca_lcc_results ? Object.keys(newValue.data.lca_lcc_results) : null,
+    summaryKeys: newValue?.data?.summary ? Object.keys(newValue.data.summary) : null,
     fullStructure: newValue
   })
 }, { deep: true })
@@ -2521,6 +2524,7 @@ const resetSettings = () => {
               :get-validation-message="getValidationMessage"
               :construction-summary="constructionSummary"
               :is-delete-dialog-open="isDeleteDialogOpen"
+              :analyze-with-constructions-function="analyzeWithConstructions"
               @update:is-sheet-open="isSheetOpen = $event"
               @update:selected-energy-standard="selectedEnergyStandard = $event"
               @update:construction-year="constructionYear = $event"
