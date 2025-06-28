@@ -1039,7 +1039,7 @@ const formatDisplayValue = (value: any) => {
 const translateFieldName = (fieldName: string): string => {
   const fieldTranslations: { [key: string]: string } = {
     'verxxh': 'Wärmeversorgung',
-    'bajahr': 'Baujahr',
+    'construction_year': 'Baujahr',
     'epl': 'Einzelpan',
     'bgf': 'Bruttogrundfläche',
     'ngf': 'Nettogrundfläche',
@@ -1281,6 +1281,94 @@ const resetSettings = () => {
     })
   } catch (err) {
     console.error('Error resetting settings:', err)
+  }
+}
+
+// Helper functions for the new card fields
+const getZustandsbewertungColor = (value: string) => {
+  if (!value || value === 'keine Info vorhanden') return 'text-gray-500'
+  
+  switch (value) {
+    case 'schlecht':
+      return 'text-red-600'
+    case 'eher schlecht':
+      return 'text-red-400'
+    case 'eher gut':
+      return 'text-yellow-500'
+    case 'gut':
+      return 'text-green-400'
+    case 'sehr gut':
+      return 'text-green-600'
+    default:
+      return 'text-gray-500'
+  }
+}
+
+const getZustandsbewertungArrow = (value: string) => {
+  if (!value || value === 'keine Info vorhanden') return '→'
+  
+  switch (value) {
+    case 'schlecht':
+      return '↓'
+    case 'eher schlecht':
+      return '↘'
+    case 'eher gut':
+      return '↗'
+    case 'gut':
+      return '↑'
+    case 'sehr gut':
+      return '↑'
+    default:
+      return '→'
+  }
+}
+
+const getVerbesserungspotenzialArrow = (value: string) => {
+  if (!value || value === 'keine Info vorhanden') return '→'
+  
+  switch (value) {
+    case 'kaum Verbesserungspotenzial':
+      return '↓'
+    case 'geringes Verbesserungspotenzial':
+      return '↘'
+    case 'mittleres Verbesserungspotenzial':
+      return '→'
+    case 'hohes Verbesserungspotenzial':
+      return '↗'
+    case 'sehr hohes Verbesserungspotenzial':
+      return '↑'
+    default:
+      return '→'
+  }
+}
+
+const getBaufachlicheMoeglichkeitenColor = (value: string) => {
+  if (!value || value === 'keine Info vorhanden') return 'text-gray-500'
+  
+  switch (value) {
+    case 'gering':
+      return 'text-red-600'
+    case 'mittel':
+      return 'text-yellow-500'
+    case 'umfassend':
+      return 'text-green-600'
+    default:
+      return 'text-gray-500'
+  }
+}
+
+const getBaufachlicheMoeglichkeitenArrow = (value: string) => {
+  if (!value || value === 'keine Info vorhanden') return '→'
+  
+  switch (value) {
+    case 'gering':
+      return '↓'
+    case 'mittel':
+      return '→'
+    case 'umfassend':
+      return '↑'
+    default:
+      return '→'
   }
 }
 </script>
@@ -2018,9 +2106,9 @@ const resetSettings = () => {
             <div class="mb-6">
               <div class="flex items-center justify-between">
                 <div>
-                  <h2 class="text-2xl font-bold tracking-tight">Überblick</h2>
+                  <h2 class="text-2xl font-bold tracking-tight">{{ buildingData?.buildings_assumptions?.gebbez || 'Gebäude' }}</h2>
                   <p class="text-muted-foreground">
-                    Übersicht der wichtigsten Gebäudeinformationen und Kennzahlen
+                    {{ [buildingData?.buildings_assumptions?.gebstr, buildingData?.buildings_assumptions?.gebplz, buildingData?.buildings_assumptions?.gebort].filter(Boolean).join(', ') || 'Adressinformationen nicht verfügbar' }}
                   </p>
                 </div>
               </div>
@@ -2048,9 +2136,9 @@ const resetSettings = () => {
                 <div v-else>
 
                   
-                  <Accordion type="single" collapsible class="w-full" default-value="building-info">
-                    <!-- Building Assumptions -->
-                    <AccordionItem value="building-info">
+                  <Accordion type="single" collapsible class="w-full" default-value="building-assumptions">
+                    <!-- Gebäudeannahmen -->
+                    <AccordionItem value="building-assumptions">
                       <AccordionTrigger>Gebäudeannahmen</AccordionTrigger>
                       <AccordionContent>
                         <div v-if="buildingData?.buildings_assumptions" class="space-y-3">
@@ -2087,35 +2175,78 @@ const resetSettings = () => {
                       </AccordionContent>
                     </AccordionItem>
 
-                    <!-- GML Mapping Info -->
-                    <AccordionItem value="gml-mapping">
-                      <AccordionTrigger>GML Zuordnung</AccordionTrigger>
+                    <!-- Gebäudedaten (FDH+EMIS) -->
+                    <AccordionItem value="building-data">
+                      <AccordionTrigger>Gebäudedaten (FDH+EMIS)</AccordionTrigger>
                       <AccordionContent>
-                        <div v-if="buildingData?.gmlid_gebid_mapping" class="space-y-3">
-                          <div v-for="(mapping, index) in buildingData.gmlid_gebid_mapping" :key="index" 
-                               class="border rounded-lg p-3 bg-gray-50">
-                            <div class="text-sm space-y-1">
+                        <div v-if="buildingData?.buildings_assumptions" class="space-y-3">
+                          <div class="grid grid-cols-1 gap-2 text-sm">
+                            <div class="flex justify-between">
+                              <span class="font-medium text-gray-600">Einzelplan:</span>
+                              <span class="text-gray-900">{{ formatDisplayValue(buildingData.buildings_assumptions.epl) }}</span>
+                            </div>
+                            <div class="flex justify-between">
+                              <span class="font-medium text-gray-600">Bauamt Bezeichnung:</span>
+                              <span class="text-gray-900">{{ formatDisplayValue(buildingData.buildings_assumptions.babez) }}</span>
+                            </div>
+                            <div class="flex justify-between">
+                              <span class="font-medium text-gray-600">Liegenschaft Bezeichnung:</span>
+                              <span class="text-gray-900">{{ formatDisplayValue(buildingData.buildings_assumptions.ligbez) }}</span>
+                            </div>
+                            <div class="flex justify-between">
+                              <span class="font-medium text-gray-600">Zuständige Abteilung:</span>
+                              <span class="text-gray-900">{{ formatDisplayValue(buildingData.buildings_assumptions.gebzabt) }}</span>
+                            </div>
+                            <div class="flex justify-between">
+                              <span class="font-medium text-gray-600">Denkmalschutz:</span>
+                              <span class="text-gray-900">{{ formatDisplayValue(buildingData.buildings_assumptions.denkm) }}</span>
+                            </div>
+                            
+                            <div class="border-t pt-2 mt-2">
                               <div class="flex justify-between">
-                                <span class="font-medium text-gray-600">GML ID:</span>
-                                <span class="text-gray-900 font-mono text-xs">{{ mapping.gmlid }}</span>
+                                <span class="font-medium text-gray-600">Baujahr:</span>
+                                <span class="text-gray-900">{{ formatDisplayValue(buildingData.buildings_assumptions.construction_year) }}</span>
                               </div>
                               <div class="flex justify-between">
-                                <span class="font-medium text-gray-600">Geprüft:</span>
-                                <span class="text-gray-900">{{ mapping.geprueft || 'N/A' }}</span>
+                                <span class="font-medium text-gray-600">BGF m²:</span>
+                                <span class="text-gray-900">{{ formatDisplayValue(buildingData.buildings_assumptions.bgf) }}</span>
                               </div>
                               <div class="flex justify-between">
-                                <span class="font-medium text-gray-600">Kontrollbedarf:</span>
-                                <span class="text-gray-900">{{ mapping.kontrollbedarf || 'N/A' }}</span>
+                                <span class="font-medium text-gray-600">NGF m²:</span>
+                                <span class="text-gray-900">{{ formatDisplayValue(buildingData.buildings_assumptions.ngf) }}</span>
                               </div>
                               <div class="flex justify-between">
-                                <span class="font-medium text-gray-600">CityGML konsistent:</span>
-                                <span class="text-gray-900">{{ mapping.konsistent_citygml_fdh || 'N/A' }}</span>
+                                <span class="font-medium text-gray-600">Dachgeschosse:</span>
+                                <span class="text-gray-900">{{ formatDisplayValue(buildingData.buildings_assumptions.dganz) }}</span>
+                              </div>
+                              <div class="flex justify-between">
+                                <span class="font-medium text-gray-600">Untergeschosse:</span>
+                                <span class="text-gray-900">{{ formatDisplayValue(buildingData.buildings_assumptions.uganz) }}</span>
+                              </div>
+                              <div class="flex justify-between">
+                                <span class="font-medium text-gray-600">Geschosse:</span>
+                                <span class="text-gray-900">{{ formatDisplayValue(buildingData.buildings_assumptions.geanz) }}</span>
+                              </div>
+                              <div class="flex justify-between">
+                                <span class="font-medium text-gray-600">Summe Geschosse:</span>
+                                <span class="text-gray-900">{{ formatDisplayValue(buildingData.buildings_assumptions.geges) }}</span>
+                              </div>
+                            </div>
+                            
+                            <div class="border-t pt-2 mt-2">
+                              <div class="flex justify-between">
+                                <span class="font-medium text-gray-600">Wärmeversorgung aus FDH:</span>
+                                <span class="text-gray-900">{{ formatDisplayValue(buildingData.buildings_assumptions.versorgung_fdh) }}</span>
+                              </div>
+                              <div class="flex justify-between">
+                                <span class="font-medium text-gray-600">Wärmeversorgung aus EMIS:</span>
+                                <span class="text-gray-900">{{ formatDisplayValue(buildingData.buildings_assumptions.versorgung_emis_mp) }}</span>
                               </div>
                             </div>
                           </div>
                         </div>
                         <div v-else class="text-sm text-gray-500">
-                          Keine GML Zuordnungsdaten verfügbar
+                          Keine Gebäudedaten verfügbar
                         </div>
                       </AccordionContent>
                     </AccordionItem>
@@ -2193,288 +2324,83 @@ const resetSettings = () => {
           </div>
         </div>
         
-            <!-- Energy Metrics Cards -->
+            <!-- Building Assessment Cards -->
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <!-- Energiebedarf Card -->
+              <!-- Baufachliche Möglichkeiten Card -->
               <Card class="min-h-32">
                 <CardHeader class="pb-2">
                   <div class="flex items-center justify-between">
-                    <CardTitle class="text-sm font-medium text-foreground">Energiebedarf</CardTitle>
-                    <HoverCard>
-                      <HoverCardTrigger>
-                        <Zap class="h-4 w-4 text-muted-foreground cursor-help" />
-                      </HoverCardTrigger>
-                      <HoverCardContent side="top" class="w-80">
-                        <div class="space-y-2">
-                          <h4 class="font-medium">Energiebedarf Optionen</h4>
-                          
-                          <!-- Energy Type Selection -->
-                          <div class="space-y-2">
-                            <Label class="text-xs">Energietyp</Label>
-                            <Select v-model="selectedEnergyType" v-if="energyCardData?.options">
-                              <SelectTrigger class="h-8">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem
-                                  v-for="type in energyCardData.options.energy_types"
-                                  :key="type.key"
-                                  :value="type.key"
-                                >
-                                  {{ type.label }}
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          
-                          <!-- Unit Selection -->
-                          <div class="space-y-2">
-                            <Label class="text-xs">Einheit</Label>
-                            <Select v-model="selectedEnergyUnit" v-if="energyCardData?.options">
-                              <SelectTrigger class="h-8">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem
-                                  v-for="unit in energyCardData.options.units"
-                                  :key="unit.key"
-                                  :value="unit.key"
-                                >
-                                  {{ unit.label }}
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                      </HoverCardContent>
-                    </HoverCard>
+                    <CardTitle class="text-sm font-bold text-foreground">Baufachliche Möglichkeiten für energetische Verbesserungen Hülle</CardTitle>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div v-if="energyCardData" class="space-y-2">
-                    <!-- Baseline Value -->
-                    <div class="text-2xl font-bold">
-                      {{ formatNumber(energyCardData.baseline.value) }}
-                    </div>
-                    <p class="text-xs text-muted-foreground">{{ energyCardData.baseline.unit }}</p>
-                    
-                    <!-- Scenario Improvements -->
-                    <div v-if="energyCardData.scenarios.length > 0" class="space-y-1">
-                      <div v-for="scenario in energyCardData.scenarios" :key="scenario.name" 
-                           class="flex justify-between text-xs">
-                        <span class="truncate">{{ scenario.name }}:</span>
-                        <span :class="getImprovementColorClass(scenario.improvement)">
-                          {{ scenario.improvement > 0 ? '+' : '' }}{{ formatNumber(scenario.improvement, 1) }}%
-                        </span>
+                  <div class="space-y-2">
+                    <div class="flex items-center space-x-2">
+                      <div class="text-lg font-bold" :class="getBaufachlicheMoeglichkeitenColor(buildingData?.buildings_assumptions?.envbbaf)">
+                        {{ formatDisplayValue(buildingData?.buildings_assumptions?.envbbaf) }}
                       </div>
+                      <span class="text-lg" :class="getBaufachlicheMoeglichkeitenColor(buildingData?.buildings_assumptions?.envbbaf)">
+                        {{ getBaufachlicheMoeglichkeitenArrow(buildingData?.buildings_assumptions?.envbbaf) }}
+                      </span>
                     </div>
-                  </div>
-                  <div v-else class="text-2xl font-bold">
-                    <Skeleton class="h-6 w-16" />
                   </div>
                 </CardContent>
               </Card>
               
-              <!-- Emissionen Card -->
+              <!-- Durchgeführte energetische Verbesserungen Card -->
               <Card class="min-h-32">
                 <CardHeader class="pb-2">
                   <div class="flex items-center justify-between">
-                    <CardTitle class="text-sm font-medium text-foreground">CO₂-Emissionen</CardTitle>
-                    <HoverCard>
-                      <HoverCardTrigger>
-                        <Factory class="h-4 w-4 text-muted-foreground cursor-help" />
-                      </HoverCardTrigger>
-                      <HoverCardContent side="top" class="w-80">
-                        <div class="space-y-2">
-                          <h4 class="font-medium">Emissions Optionen</h4>
-                          
-                          <!-- Emission Type Selection -->
-                          <div class="space-y-2">
-                            <Label class="text-xs">Emissionstyp</Label>
-                            <Select v-model="selectedEmissionType" v-if="emissionCardData?.options">
-                              <SelectTrigger class="h-8">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem
-                                  v-for="type in emissionCardData.options.emission_types"
-                                  :key="type.key"
-                                  :value="type.key"
-                                >
-                                  {{ type.label }}
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          
-                          <!-- Unit Selection -->
-                          <div class="space-y-2">
-                            <Label class="text-xs">Einheit</Label>
-                            <Select v-model="selectedEmissionUnit" v-if="emissionCardData?.options">
-                              <SelectTrigger class="h-8">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem
-                                  v-for="unit in emissionCardData.options.units"
-                                  :key="unit.key"
-                                  :value="unit.key"
-                                >
-                                  {{ unit.label }}
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                      </HoverCardContent>
-                    </HoverCard>
+                    <CardTitle class="text-sm font-bold text-foreground">Durchgeführte energetische Verbesserungen Hülle</CardTitle>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div v-if="emissionCardData" class="space-y-2">
-                    <!-- Baseline Value -->
-                    <div class="text-2xl font-bold">
-                      {{ formatNumber(emissionCardData.baseline.value, 3) }}
+                  <div class="space-y-2">
+                    <div class="text-lg font-bold text-gray-900">
+                      {{ formatDisplayValue(buildingData?.buildings_assumptions?.envbgh) }}
                     </div>
-                    <p class="text-xs text-muted-foreground">{{ emissionCardData.baseline.unit }}</p>
-                    
-                    <!-- Scenario Improvements -->
-                    <div v-if="emissionCardData.scenarios.length > 0" class="space-y-1">
-                      <div v-for="scenario in emissionCardData.scenarios" :key="scenario.name" 
-                           class="flex justify-between text-xs">
-                        <span class="truncate">{{ scenario.name }}:</span>
-                        <span :class="getImprovementColorClass(scenario.improvement)">
-                          {{ scenario.improvement > 0 ? '+' : '' }}{{ formatNumber(scenario.improvement, 1) }}%
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <div v-else class="text-2xl font-bold">
-                    <Skeleton class="h-6 w-16" />
                   </div>
                 </CardContent>
               </Card>
               
-              <!-- Stranding Card -->
+              <!-- Verbesserungspotenzial Card -->
               <Card class="min-h-32">
                 <CardHeader class="pb-2">
                   <div class="flex items-center justify-between">
-                    <CardTitle class="text-sm font-medium text-foreground">Stranding Risiko</CardTitle>
-                    <AlertTriangle class="h-4 w-4 text-muted-foreground" />
+                    <CardTitle class="text-sm font-bold text-foreground">Verbesserungspotenzial</CardTitle>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div v-if="strandingCardData" class="space-y-2">
-                    <!-- Baseline Value -->
-                    <div class="text-2xl font-bold" :class="getRiskColorClass(strandingCardData.baseline.riskLevel)">
-                      {{ formatNumber(strandingCardData.baseline.value, 1) }}
-                    </div>
-                    <p class="text-xs text-muted-foreground">{{ strandingCardData.baseline.unit }}</p>
-                    
-                    <!-- Risk Status -->
-                    <div class="text-xs">
-                      <Badge 
-                        :variant="strandingCardData.baseline.riskLevel === 'low' ? 'default' : 
-                                 strandingCardData.baseline.riskLevel === 'medium' ? 'secondary' : 'destructive'"
-                        class="text-xs"
-                      >
-                        {{ strandingCardData.baseline.status }}
-                      </Badge>
-                    </div>
-                    
-                    <!-- Scenario Improvements -->
-                    <div v-if="strandingCardData.scenarios.length > 0" class="space-y-1">
-                      <div v-for="scenario in strandingCardData.scenarios" :key="scenario.name" 
-                           class="flex justify-between text-xs">
-                        <span class="truncate">{{ scenario.name }}:</span>
-                        <span :class="getImprovementColorClass(scenario.improvement)">
-                          {{ scenario.improvement > 0 ? '+' : '' }}{{ formatNumber(scenario.improvement, 1) }}J
-                        </span>
+                  <div class="space-y-2">
+                    <div class="flex items-center space-x-2">
+                      <div class="text-lg font-bold" :class="getVerbesserungspotenzialColor(buildingData?.buildings_assumptions?.envbpot)">
+                        {{ formatDisplayValue(buildingData?.buildings_assumptions?.envbpot) }}
                       </div>
+                      <span class="text-lg" :class="getVerbesserungspotenzialColor(buildingData?.buildings_assumptions?.envbpot)">
+                        {{ getVerbesserungspotenzialArrow(buildingData?.buildings_assumptions?.envbpot) }}
+                      </span>
                     </div>
-                  </div>
-                  <div v-else class="text-2xl font-bold">
-                    <Skeleton class="h-6 w-16" />
                   </div>
                 </CardContent>
               </Card>
               
-              <!-- Betriebskosten Card -->
+              <!-- Zustandsbewertung Card -->
               <Card class="min-h-32">
                 <CardHeader class="pb-2">
                   <div class="flex items-center justify-between">
-                    <CardTitle class="text-sm font-medium text-foreground">Betriebskosten</CardTitle>
-                    <HoverCard>
-                      <HoverCardTrigger>
-                        <Euro class="h-4 w-4 text-muted-foreground cursor-help" />
-                      </HoverCardTrigger>
-                      <HoverCardContent side="top" class="w-80">
-                        <div class="space-y-2">
-                          <h4 class="font-medium">Kosten Optionen</h4>
-                          
-                          <!-- Cost Type Selection -->
-                          <div class="space-y-2">
-                            <Label class="text-xs">Kostentyp</Label>
-                            <Select v-model="selectedCostType" v-if="costCardData?.options">
-                              <SelectTrigger class="h-8">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem
-                                  v-for="type in costCardData.options.cost_types"
-                                  :key="type.key"
-                                  :value="type.key"
-                                >
-                                  {{ type.label }}
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          
-                          <!-- Unit Selection -->
-                          <div class="space-y-2">
-                            <Label class="text-xs">Einheit</Label>
-                            <Select v-model="selectedCostUnit" v-if="costCardData?.options">
-                              <SelectTrigger class="h-8">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem
-                                  v-for="unit in costCardData.options.units"
-                                  :key="unit.key"
-                                  :value="unit.key"
-                                >
-                                  {{ unit.label }}
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                      </HoverCardContent>
-                    </HoverCard>
+                    <CardTitle class="text-sm font-bold text-foreground">Zustandsbewertung</CardTitle>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div v-if="costCardData" class="space-y-2">
-                    <!-- Baseline Value -->
-                    <div class="text-2xl font-bold">
-                      {{ formatNumber(costCardData.baseline.value) }}
-                    </div>
-                    <p class="text-xs text-muted-foreground">{{ costCardData.baseline.unit }}</p>
-                    
-                    <!-- Scenario Improvements -->
-                    <div v-if="costCardData.scenarios.length > 0" class="space-y-1">
-                      <div v-for="scenario in costCardData.scenarios" :key="scenario.name" 
-                           class="flex justify-between text-xs">
-                        <span class="truncate">{{ scenario.name }}:</span>
-                        <span :class="getImprovementColorClass(scenario.improvement)">
-                          {{ scenario.improvement > 0 ? '+' : '' }}{{ formatNumber(scenario.improvement, 1) }}%
-                        </span>
+                  <div class="space-y-2">
+                    <div class="flex items-center space-x-2">
+                      <div class="text-lg font-bold" :class="getZustandsbewertungColor(buildingData?.buildings_assumptions?.envbzb)">
+                        {{ formatDisplayValue(buildingData?.buildings_assumptions?.envbzb) }}
                       </div>
+                      <span class="text-lg" :class="getZustandsbewertungColor(buildingData?.buildings_assumptions?.envbzb)">
+                        {{ getZustandsbewertungArrow(buildingData?.buildings_assumptions?.envbzb) }}
+                      </span>
                     </div>
-                  </div>
-                  <div v-else class="text-2xl font-bold">
-                    <Skeleton class="h-6 w-16" />
                   </div>
                 </CardContent>
               </Card>
