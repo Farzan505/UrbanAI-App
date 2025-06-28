@@ -423,7 +423,15 @@ const scopeEmissionsData = computed(() => {
         const heating = scopeValues.heating?.[dateKey] || 0
         const dhw = scopeValues.dhw?.[dateKey] || 0
         const electricity = scopeValues.electricity?.[dateKey] || 0
-        return heating + dhw + electricity
+        
+        // Add LCA categories if available
+        const lca_base = scopeValues.lca_base?.[dateKey] || 0
+        const lca_roof = scopeValues.lca_roof?.[dateKey] || 0
+        const lca_window = scopeValues.lca_window?.[dateKey] || 0
+        const lca_wall = scopeValues.lca_wall?.[dateKey] || 0
+        const lca_hvac = scopeValues.lca_hvac?.[dateKey] || 0
+        
+        return heating + dhw + electricity + lca_base + lca_roof + lca_window + lca_wall + lca_hvac
       })
 
       datasets.push({
