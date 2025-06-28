@@ -340,9 +340,7 @@ export function useRetrofitAnalysis() {
       )
 
       console.log('📤 Sending base scenario payload:', payload)
-      console.log('📤 GEOMETRY_DATA in payload:', payload.geometry_data)
-      console.log('📤 GEOMETRY_DATA keys:', Object.keys(payload.geometry_data || {}))
-      console.log('📤 GEOMETRY_DATA type:', typeof payload.geometry_data)
+
 
       // Debug each key individually before JSON.stringify
       Object.keys(payload.geometry_data || {}).forEach(key => {
@@ -440,13 +438,13 @@ export function useRetrofitAnalysis() {
         throw new Error('Gebäudeannahmen (buildings_assumptions) sind nicht verfügbar')
       }
 
-      if (!assumptions.gebid) {
+      if (!assumptions.building_id) {
         console.error('❌ Missing gebid in assumptions:', assumptions)
         throw new Error('Gebäude-ID (GEBID) ist nicht verfügbar')
       }
 
       // Use gebplz directly from assumptions, fallback to extracting from gebid
-      const gebplz = assumptions.gebplz || assumptions.gebid?.substring(0, 5) || '00000'
+      const gebplz = assumptions.gebplz 
 
 
       if (gebplz.length < 5) {
@@ -497,7 +495,8 @@ export function useRetrofitAnalysis() {
       // Log the complete request payload being sent
       const requestBody = safeJSONStringify(payload)
       console.log('🚀 COMPLETE REQUEST BODY for analyze-retrofit (construction analysis):')
-      console.log('📦 Full payload object:', payload)
+      console.log('📦 Full payload object 1:', payload)
+      console.log('📦 Full payload object 1:', requestBody)
 
 
       const response = await fetch(`${apiBaseUrl.value}/api/energy/analyze-retrofit`, {
@@ -619,7 +618,8 @@ export function useRetrofitAnalysis() {
       // Log the complete request payload being sent
       const requestBody = safeJSONStringify(payload)
       console.log('🚀 COMPLETE REQUEST BODY for analyze-retrofit (retrofit scenario):')
-      console.log('📦 Full payload object:', payload)
+      console.log('📦 Full payload object 2:', payload)
+      console.log('📦 Full payload object 2:', requestBody)
 
 
       const response = await fetch(`${apiBaseUrl.value}/api/energy/analyze-retrofit`, {

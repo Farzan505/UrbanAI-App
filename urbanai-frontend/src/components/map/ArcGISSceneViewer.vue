@@ -72,13 +72,11 @@ const fixRingOrientation = (rings: number[][][]) => {
     if (index === 0) {
       // Exterior ring should be clockwise for ArcGIS
       if (!ringIsClockwise) {
-        
         return reverseRing(ring)
       }
     } else {
       // Interior rings (holes) should be counter-clockwise for ArcGIS
       if (ringIsClockwise) {
-
         return reverseRing(ring)
       }
     }
@@ -249,7 +247,7 @@ const processGeometryData = async (data: GeometryResponse) => {
 
         map.add(shadingLayer)
       } catch (layerError) {
-        console.error('❌ Error creating shading layer:', layerError)
+        // Error creating shading layer
       }
     }
 
@@ -330,7 +328,7 @@ const processGeometryData = async (data: GeometryResponse) => {
 
         map.add(adiabaticLayer)
       } catch (layerError) {
-        console.error('❌ Error creating adiabatic layer:', layerError)
+        // Error creating adiabatic layer
       }
     }
 
@@ -339,7 +337,6 @@ const processGeometryData = async (data: GeometryResponse) => {
 
   } catch (err) {
     error.value = `Failed to process geometry data: ${err instanceof Error ? err.message : 'Unknown error'}`
-    console.error('Processing error:', err)
   }
 }
 
@@ -632,7 +629,6 @@ const visualizeByProperty = (selectedProperty: string) => {
 
   } catch (err) {
     error.value = `Failed to visualize by property: ${err instanceof Error ? err.message : 'Unknown error'}`
-    console.error('Property visualization error:', err)
   }
 }
 
@@ -764,7 +760,6 @@ const initializeMap = async () => {
 
   } catch (err) {
     error.value = `Failed to initialize map: ${err instanceof Error ? err.message : 'Unknown error'}`
-    console.error('❌ Map initialization error:', err)
   }
 }
 
@@ -815,7 +810,6 @@ onMounted(async () => {
     }
   } catch (err) {
     error.value = `Initialization failed: ${err instanceof Error ? err.message : 'Unknown error'}`
-    console.error('❌ Initialization error:', err)
   }
 })
 
