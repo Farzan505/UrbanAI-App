@@ -11,7 +11,7 @@ import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Bar } from 'vue-chartjs'
 import { Chart as ChartJS, Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale, PointElement, LineElement } from 'chart.js'
-import { Building, Layers, Euro, Leaf, Download, Settings, Plus, X } from 'lucide-vue-next'
+import { Building, Layers, Euro, Leaf, Download, Settings, Plus, X, AlertTriangle } from 'lucide-vue-next'
 import { useConstructionData } from '@/composables/useConstructionData'
 import { useRetrofitAnalysis } from '@/composables/useRetrofitAnalysis'
 import { toast } from 'vue-sonner'
@@ -920,13 +920,14 @@ const analyzeWithConstructions = async () => {
     isAnalyzingWithConstructions.value = true
     constructionAnalysisError.value = ''
 
-    // Use the composable function
+    // Use the composable function with retrofit scenario data
     const data = await performConstructionAnalysis(
       props.buildingData,
       props.geometryData,
       constructionSelections,
       props.selectedCo2PathScenario || 'KSG',
-      props.selectedCo2CostScenario || '0% reine Zeitpräferenzrate'
+      props.selectedCo2CostScenario || '0% reine Zeitpräferenzrate',
+      props.retrofitScenario // Include retrofit scenario data
     )
     
     // Note: The new data will be passed via props from the parent component
@@ -948,6 +949,11 @@ const resetConstructionSelections = () => {
     description: 'Die Konstruktionsauswahl wurde auf die Standardwerte zurückgesetzt.'
   })
 }
+
+// Check if retrofit scenario has building envelope renovation
+const hasEnvelopeRenovation = computed(() => {
+  return props.retrofitScenario?.energy_standard && props.retrofitScenario?.construction_year
+})
 </script>
 
 <template>
@@ -985,6 +991,20 @@ const resetConstructionSelections = () => {
                 <!-- Error Message -->
                 <div v-if="constructionError" class="bg-red-50 border border-red-200 rounded-md p-3">
                   <p class="text-sm text-red-600">{{ constructionError }}</p>
+                </div>
+                
+                <!-- Warning Message for Missing Envelope Renovation -->
+                <div v-if="!hasEnvelopeRenovation" class="bg-amber-50 border border-amber-200 rounded-md p-3">
+                  <div class="flex items-start space-x-2">
+                    <AlertTriangle class="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                    <div class="text-sm text-amber-800">
+                      <p class="font-medium mb-1">Sanierung der Gebäudehülle erforderlich</p>
+                      <p>
+                        Bitte definieren Sie zuerst ein Sanierungsszenario mit Energiestandard und Sanierungsjahr 
+                        für die Gebäudehülle, bevor Sie die Konstruktionsauswahl verwenden.
+                      </p>
+                    </div>
+                  </div>
                 </div>
                 
                 <!-- Loading State -->
@@ -1146,7 +1166,7 @@ const resetConstructionSelections = () => {
                 </Button>
                 <Button 
                   @click="analyzeWithConstructions"
-                  :disabled="isAnalyzingWithConstructions"
+                  :disabled="isAnalyzingWithConstructions || !hasEnvelopeRenovation"
                   class="flex-1"
                 >
                   <template v-if="isAnalyzingWithConstructions">
