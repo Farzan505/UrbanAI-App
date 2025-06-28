@@ -49,7 +49,7 @@ const reductionPathOptions = {
   plugins: {
     title: {
       display: true,
-      text: 'CO₂-Reduktionspfad',
+      text: '',
       font: {
         size: 16,
         weight: 'bold' as const
@@ -63,7 +63,7 @@ const reductionPathOptions = {
       intersect: false,
       callbacks: {
         label: function(context: any) {
-          return `${context.dataset.label}: ${context.parsed.y.toFixed(2)} kg CO₂/m²`
+          return `${context.dataset.label}: ${context.parsed.y.toFixed(2)} kg CO₂-Äq/m²`
         }
       }
     }
@@ -84,7 +84,7 @@ const reductionPathOptions = {
     y: {
       title: {
         display: true,
-        text: 'CO₂-Emissionen (kg CO₂/m²)'
+        text: 'CO₂-Emissionen (kg CO₂-Äq/m²)'
       },
       beginAtZero: true
     }
@@ -103,7 +103,7 @@ const scopeEmissionsOptions = {
   plugins: {
     title: {
       display: true,
-      text: 'Scope Emissionen',
+      text: '',
       font: {
         size: 16,
         weight: 'bold' as const
@@ -135,7 +135,7 @@ const scopeEmissionsOptions = {
     y: {
       title: {
         display: true,
-        text: 'Emissionen (kg CO₂)'
+        text: 'Emissionen (kg CO₂-Äq)'
       },
       stacked: true,
       beginAtZero: true
@@ -150,7 +150,7 @@ const costsOptions = {
   plugins: {
     title: {
       display: true,
-      text: 'Kosten über Zeit',
+      text: '',
       font: {
         size: 16,
         weight: 'bold' as const
@@ -186,7 +186,7 @@ const costsOptions = {
     y: {
       title: {
         display: true,
-        text: 'Kosten (€)'
+        text: 'Kosten (€/m²)'
       },
       beginAtZero: true
     }
@@ -256,7 +256,7 @@ const reductionPathData = computed(() => {
 
   const datasets: any[] = [
     {
-      label: 'CO₂-Reduktionspfad',
+      label: 'CO₂-Äq Reduktionspfad',
       data: reductionValues,
       borderColor: 'rgb(59, 130, 246)',
       backgroundColor: 'rgba(59, 130, 246, 0.1)',
@@ -280,7 +280,7 @@ const reductionPathData = computed(() => {
         console.log('🔥 Status quo heating/DHW:', { years: statusQuoYears, values: statusQuoValues })
 
         datasets.push({
-          label: 'CO₂ Heizung/Warmwasser (Status Quo)',
+          label: 'CO₂-Äq Heizen/Warmwasser (Status Quo)',
           data: statusQuoValues,
           borderColor: 'rgb(239, 68, 68)',
           backgroundColor: 'rgba(239, 68, 68, 0.1)',
@@ -300,7 +300,7 @@ const reductionPathData = computed(() => {
         console.log('🔥 Combined heating/DHW:', { years: combinedYears, values: combinedValues })
 
         datasets.push({
-          label: 'CO₂ Heizung/Warmwasser (Szenario)',
+          label: 'CO₂-Äq Heizen/Warmwasser (Szenario)',
           data: combinedValues,
           borderColor: 'rgb(16, 185, 129)',
           backgroundColor: 'rgba(16, 185, 129, 0.1)',
@@ -364,7 +364,7 @@ const scopeEmissionsData = computed(() => {
 
   // Determine which profile to show based on switch and availability
   let profileToShow = 'profile_status_quo'
-  if (useScenario.value && scenarioActivated.value && results.scope_emissions.profile_combined) {
+  if (useScenario.value && scenarioActivated.value) {
     profileToShow = 'profile_combined'
   }
 
@@ -451,7 +451,7 @@ const co2CostsData = computed(() => {
     labels: years,
     datasets: [
       {
-        label: `CO₂-Steuerkosten (${useScenario.value ? 'Szenario' : 'Status Quo'})`,
+        label: `CO₂-ÄqVermeidungskosten (${useScenario.value ? 'Szenario' : 'Status Quo'})`,
         data: values,
         borderColor: 'rgb(234, 88, 12)',
         backgroundColor: 'rgba(234, 88, 12, 0.1)',
@@ -580,7 +580,7 @@ const operationCostsData = computed(() => {
           <CardHeader>
             <CardTitle class="flex items-center space-x-2">
               <TrendingDown class="h-5 w-5 text-green-600" />
-              <span>CO₂-Reduktionspfad</span>
+              <span>CO₂-Äq Reduktionspfad</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -622,7 +622,7 @@ const operationCostsData = computed(() => {
           <CardHeader>
             <CardTitle class="flex items-center space-x-2">
               <Euro class="h-5 w-5 text-orange-600" />
-              <span>CO₂-Steuerkosten</span>
+              <span>CO₂-Äq Vermeidungskosten</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -633,7 +633,7 @@ const operationCostsData = computed(() => {
               />
             </div>
             <div v-else class="h-80 flex items-center justify-center text-muted-foreground">
-              Keine CO₂-Kostendaten verfügbar
+              Keine CO₂-Äq Kostendaten verfügbar
             </div>
           </CardContent>
         </Card>

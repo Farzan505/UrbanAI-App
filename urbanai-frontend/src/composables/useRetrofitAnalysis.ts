@@ -275,7 +275,7 @@ export function useRetrofitAnalysis() {
       // From HVAC selection
       if (options.retrofitScenario.hvac && options.retrofitScenario.hvac_year) {
         payload.retrofit_system_type = options.retrofitScenario.hvac.hvac_type
-        payload.retrofit_subsystem_type = options.retrofitScenario.hvac.hvac_type
+        payload.retrofit_subsystem_type = options.retrofitScenario.hvac.subtype
         payload.retrofit_hvac_year = parseInt(options.retrofitScenario.hvac_year)
       }
     }

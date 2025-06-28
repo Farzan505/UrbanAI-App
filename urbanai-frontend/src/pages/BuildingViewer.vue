@@ -1502,7 +1502,7 @@ const isDataComplete = computed(() => {
                             <Label for="hvac-type-select">Auswahl des Systems</Label>
                             <Select v-model="selectedHVACType">
                               <SelectTrigger id="hvac-type-select">
-                                <SelectValue placeholder="Wählen Sie TGA-Typ..." />
+                                <SelectValue placeholder="Wählen Sie die Wärmeversorgnung..." />
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem
@@ -1521,7 +1521,7 @@ const isDataComplete = computed(() => {
                             <Label for="hvac-item-select">{{ selectedHVACType }} Spezifikation</Label>
                             <Select v-model="selectedHVAC">
                               <SelectTrigger id="hvac-item-select">
-                                <SelectValue placeholder="Wählen Sie spezifisches System..." />
+                                <SelectValue placeholder="Wählen Sie ein spezifisches System..." />
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem
