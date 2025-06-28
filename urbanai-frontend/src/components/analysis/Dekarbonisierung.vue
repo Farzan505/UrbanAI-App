@@ -19,6 +19,8 @@ import {
   Legend,
   Filler
 } from 'chart.js'
+import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 // Register Chart.js components including Filler for fill option
 ChartJS.register(
@@ -33,14 +35,19 @@ ChartJS.register(
   Filler
 )
 
+// Reactive state
+const useScenario = ref(false)
+
+// Detailed view state
+const showDetailedView = ref(false)
+const selectedDetailYear = ref<number | null>(null)
+
+// Props interface for receiving emission data
 interface Props {
-  emissionData: any
+  emissionData?: any
 }
 
 const props = defineProps<Props>()
-
-// Toggle state for scenario vs status quo
-const useScenario = ref(false)
 
 // Chart options for reduction path
 const reductionPathOptions = {
@@ -205,6 +212,12 @@ watch(() => props.emissionData, (newData, oldData) => {
 watch(useScenario, (newValue) => {
   console.log('🔄 Switch toggled to:', newValue ? 'Scenario' : 'Status Quo')
   console.log('🔄 Scenario activated:', scenarioActivated.value)
+  
+  // Reset detailed view when switching scenarios
+  if (showDetailedView.value) {
+    showDetailedView.value = false
+    selectedDetailYear.value = null
+  }
 })
 
 // Computed properties for data processing
@@ -364,7 +377,7 @@ const scopeEmissionsData = computed(() => {
 
   // Determine which profile to show based on switch and availability
   let profileToShow = 'profile_status_quo'
-  if (useScenario.value && scenarioActivated.value) {
+  if (useScenario.value && scenarioActivated.value && results.scope_emissions.profile_combined) {
     profileToShow = 'profile_combined'
   }
 
@@ -372,17 +385,26 @@ const scopeEmissionsData = computed(() => {
   const profileData = results.scope_emissions[profileToShow]
   
   if (!profileData) {
+    console.log('❌ No profile data for scope emissions:', { profileToShow, available: Object.keys(results.scope_emissions || {}) })
     return null
   }
 
-  // Get years from any scope data (they should all have the same years)
-  const scope1Data = profileData['Scope 1']?.heating || {}
+  // Get years from any scope data - now handling object keys directly
+  const firstScope = Object.keys(profileData)[0]
+  const firstCategory = Object.keys(profileData[firstScope] || {})[0]
+  const sampleData = profileData[firstScope]?.[firstCategory] || {}
+  
   // Extract years from date strings like "2020-01-01" and convert to numbers
-  const years = Object.keys(scope1Data)
+  const years = Object.keys(sampleData)
     .map(dateStr => parseInt(dateStr.split('-')[0]))
     .sort((a, b) => a - b)
 
-  console.log('📊 Scope emissions:', { profileToShow, years, hasData: years.length > 0 })
+  console.log('📊 Scope emissions:', { profileToShow, years, hasData: years.length > 0, profileData })
+  
+  if (years.length === 0) {
+    console.log('❌ No years found in scope emissions data')
+    return null
+  }
   
   // Process each scope
   const datasets: any[] = []
@@ -503,6 +525,145 @@ const operationCostsData = computed(() => {
     ]
   }
 })
+
+// Detailed scope emissions data for specific year
+const detailedScopeEmissionsData = computed(() => {
+  const results = emissionResults.value
+  if (!results?.scope_emissions || !selectedDetailYear.value) {
+    return null
+  }
+
+  // Determine which profile to show based on switch and availability
+  let profileToShow = 'profile_status_quo'
+  if (useScenario.value && scenarioActivated.value && results.scope_emissions.profile_combined) {
+    profileToShow = 'profile_combined'
+  }
+
+  const profileData = results.scope_emissions[profileToShow]
+  if (!profileData) {
+    return null
+  }
+
+  const dateKey = `${selectedDetailYear.value}-01-01`
+  const baseCategories = ['heating', 'dhw', 'electricity']
+  const lcaCategories = ['lca_base', 'lca_roof', 'lca_window', 'lca_wall', 'lca_hvac']
+  
+  const categoryLabels = {
+    heating: 'Heizen',
+    dhw: 'Warmwasser',
+    electricity: 'Strom',
+    lca_base: 'Bodenplatte',
+    lca_roof: 'Dach',
+    lca_window: 'Fenster',
+    lca_wall: 'Außenwand',
+    lca_hvac: 'Wärmeversorgung'
+  }
+  const categoryColors = {
+    heating: { bg: 'rgba(239, 68, 68, 0.7)', border: 'rgb(239, 68, 68)' },
+    dhw: { bg: 'rgba(59, 130, 246, 0.7)', border: 'rgb(59, 130, 246)' },
+    electricity: { bg: 'rgba(16, 185, 129, 0.7)', border: 'rgb(16, 185, 129)' },
+    lca_base: { bg: 'rgba(168, 85, 247, 0.7)', border: 'rgb(168, 85, 247)' },
+    lca_roof: { bg: 'rgba(236, 72, 153, 0.7)', border: 'rgb(236, 72, 153)' },
+    lca_window: { bg: 'rgba(245, 158, 11, 0.7)', border: 'rgb(245, 158, 11)' },
+    lca_wall: { bg: 'rgba(34, 197, 94, 0.7)', border: 'rgb(34, 197, 94)' },
+    lca_hvac: { bg: 'rgba(99, 102, 241, 0.7)', border: 'rgb(99, 102, 241)' }
+  }
+
+  // Get available scopes
+  const scopes = Object.keys(profileData).sort()
+  
+  // Determine which categories are actually available in the data
+  const availableCategories: string[] = []
+  
+  // Check base categories
+  baseCategories.forEach(category => {
+    const hasData = scopes.some(scopeKey => {
+      const scopeValues = profileData[scopeKey]
+      return scopeValues?.[category]?.[dateKey] !== undefined
+    })
+    if (hasData) {
+      availableCategories.push(category)
+    }
+  })
+  
+  // Check LCA categories
+  lcaCategories.forEach(category => {
+    const hasData = scopes.some(scopeKey => {
+      const scopeValues = profileData[scopeKey]
+      return scopeValues?.[category]?.[dateKey] !== undefined
+    })
+    if (hasData) {
+      availableCategories.push(category)
+    }
+  })
+  
+  const datasets: any[] = []
+
+  // Create dataset for each available category
+  availableCategories.forEach(category => {
+    const categoryValues = scopes.map(scopeKey => {
+      const scopeValues = profileData[scopeKey]
+      return scopeValues?.[category]?.[dateKey] || 0
+    })
+
+    datasets.push({
+      label: categoryLabels[category as keyof typeof categoryLabels],
+      data: categoryValues,
+      backgroundColor: categoryColors[category as keyof typeof categoryColors]?.bg || 'rgba(156, 163, 175, 0.7)',
+      borderColor: categoryColors[category as keyof typeof categoryColors]?.border || 'rgb(156, 163, 175)',
+      borderWidth: 1
+    })
+  })
+
+  return {
+    labels: scopes, // Scopes on Y-axis
+    datasets
+  }
+})
+
+// Available years for detailed view
+const availableDetailYears = computed(() => {
+  const results = emissionResults.value
+  if (!results?.scope_emissions) {
+    return []
+  }
+
+  // Determine which profile to show based on switch and availability
+  let profileToShow = 'profile_status_quo'
+  if (useScenario.value && scenarioActivated.value && results.scope_emissions.profile_combined) {
+    profileToShow = 'profile_combined'
+  }
+
+  const profileData = results.scope_emissions[profileToShow]
+  if (!profileData) {
+    return []
+  }
+
+  // Get years from any scope data - now handling object keys directly
+  const firstScope = Object.keys(profileData)[0]
+  const firstCategory = Object.keys(profileData[firstScope] || {})[0]
+  const sampleData = profileData[firstScope]?.[firstCategory] || {}
+  
+  const years = Object.keys(sampleData)
+    .map(dateStr => parseInt(dateStr.split('-')[0]))
+    .sort((a, b) => a - b)
+
+  return years
+})
+
+// Functions for detailed view
+const toggleDetailedView = () => {
+  showDetailedView.value = !showDetailedView.value
+  
+  // Auto-select first available year when entering detailed view
+  if (showDetailedView.value && availableDetailYears.value.length > 0) {
+    selectedDetailYear.value = availableDetailYears.value[0]
+  }
+}
+
+const selectDetailYear = (year: number) => {
+  selectedDetailYear.value = year
+}
 </script>
 
 <template>
@@ -599,18 +760,98 @@ const operationCostsData = computed(() => {
         <!-- Top Right: Scope Emissions Chart -->
         <Card>
           <CardHeader>
-            <CardTitle class="flex items-center space-x-2">
-              <Factory class="h-5 w-5 text-blue-600" />
-              <span>Scope Emissionen</span>
-            </CardTitle>
+            <div class="flex items-center justify-between">
+              <CardTitle class="flex items-center space-x-2">
+                <Factory class="h-5 w-5 text-blue-600" />
+                <span>GHG Protocol</span>
+              </CardTitle>
+              <div class="flex items-center space-x-2">
+                <Button
+                  v-if="scopeEmissionsData"
+                  variant="outline"
+                  size="sm"
+                  @click="toggleDetailedView"
+                >
+                  {{ showDetailedView ? 'Übersicht' : 'Detailiert' }}
+                </Button>
+              </div>
+            </div>
+            
+            <!-- Year Selection for Detailed View -->
+            <div v-if="showDetailedView && availableDetailYears.length > 0" class="pt-2">
+              <Label for="detail-year-select" class="text-sm font-medium">Jahr auswählen:</Label>
+              <Select v-model="selectedDetailYear" class="mt-1">
+                <SelectTrigger id="detail-year-select" class="w-32">
+                  <SelectValue placeholder="Jahr..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem
+                    v-for="year in availableDetailYears"
+                    :key="year"
+                    :value="year"
+                  >
+                    {{ year }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </CardHeader>
           <CardContent>
-            <div v-if="scopeEmissionsData" class="h-80">
+            <!-- Overview Chart -->
+            <div v-if="!showDetailedView && scopeEmissionsData" class="h-80">
               <Bar 
                 :data="scopeEmissionsData" 
                 :options="scopeEmissionsOptions"
               />
             </div>
+            
+            <!-- Detailed Chart -->
+            <div v-else-if="showDetailedView && detailedScopeEmissionsData" class="h-80">
+              <Bar 
+                :data="detailedScopeEmissionsData" 
+                :options="{
+                  indexAxis: 'y',
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    title: {
+                      display: true,
+                      text: `Scope Emissionen ${selectedDetailYear} - Detailansicht`,
+                      font: {
+                        size: 16,
+                        weight: 'bold'
+                      }
+                    },
+                    legend: {
+                      position: 'bottom'
+                    },
+                    tooltip: {
+                      mode: 'index',
+                      intersect: false
+                    }
+                  },
+                  scales: {
+                    x: {
+                      title: {
+                        display: true,
+                        text: 'Emissionen (kg CO₂-Äq)'
+                      },
+                      stacked: true,
+                      beginAtZero: true
+                    },
+                    y: {
+                      title: {
+                        display: true,
+                        text: 'Scope'
+                      },
+                      stacked: true
+                    }
+                  }
+                }"
+              />
+            </div>
+            
+            <!-- No Data State -->
             <div v-else class="h-80 flex items-center justify-center text-muted-foreground">
               Keine Scope-Emissions-Daten verfügbar
             </div>
