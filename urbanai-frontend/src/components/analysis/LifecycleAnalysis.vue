@@ -11,10 +11,13 @@ import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Bar } from 'vue-chartjs'
 import { Chart as ChartJS, Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale, PointElement, LineElement } from 'chart.js'
-import { Building, Layers, Euro, Leaf, Download, Settings } from 'lucide-vue-next'
+import { Building, Layers, Euro, Leaf, Download, Settings, Plus, X } from 'lucide-vue-next'
 import { useConstructionData } from '@/composables/useConstructionData'
 import { useRetrofitAnalysis } from '@/composables/useRetrofitAnalysis'
 import { toast } from 'vue-sonner'
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
+import { Input } from '@/components/ui/input'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 
 // Register Chart.js components
 ChartJS.register(Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale, PointElement, LineElement)
@@ -30,6 +33,25 @@ interface Props {
   co2CostScenarios?: string[]
   selectedCo2PathScenario?: string
   selectedCo2CostScenario?: string
+  // Retrofit scenario props
+  retrofitScenario?: any
+  isSheetOpen?: boolean
+  formData?: any
+  formDataError?: string
+  isLoadingFormData?: boolean
+  energyStandards?: any
+  energyStandardsError?: string
+  isLoadingEnergyStandards?: boolean
+  selectedEnergyStandard?: string
+  constructionYear?: string
+  selectedHvacType?: string
+  selectedHvac?: string
+  hvacYear?: string
+  getHvacOptions?: any[]
+  isScenarioValid?: boolean
+  getValidationMessage?: string
+  constructionSummary?: string
+  isDeleteDialogOpen?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -41,8 +63,43 @@ const props = withDefaults(defineProps<Props>(), {
   co2PathScenarios: () => [],
   co2CostScenarios: () => [],
   selectedCo2PathScenario: 'KSG',
-  selectedCo2CostScenario: '0% reine Zeitpräferenzrate'
+  selectedCo2CostScenario: '0% reine Zeitpräferenzrate',
+  // Retrofit scenario defaults
+  retrofitScenario: null,
+  isSheetOpen: false,
+  formData: null,
+  formDataError: '',
+  isLoadingFormData: false,
+  energyStandards: null,
+  energyStandardsError: '',
+  isLoadingEnergyStandards: false,
+  selectedEnergyStandard: '',
+  constructionYear: '',
+  selectedHvacType: '',
+  selectedHvac: '',
+  hvacYear: '',
+  getHvacOptions: () => [],
+  isScenarioValid: false,
+  getValidationMessage: '',
+  constructionSummary: '',
+  isDeleteDialogOpen: false
 })
+
+// Emit events to parent
+const emit = defineEmits([
+  'update:isSheetOpen',
+  'update:selectedEnergyStandard',
+  'update:constructionYear',
+  'update:selectedHvacType',
+  'update:selectedHvac',
+  'update:hvacYear',
+  'update:isDeleteDialogOpen',
+  'openRetrofitSheet',
+  'saveRetrofitScenario',
+  'modifyRetrofitScenario',
+  'handleDeleteClick',
+  'removeRetrofitScenario'
+])
 
 // Construction selection state
 const isConstructionSheetOpen = ref(false)

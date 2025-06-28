@@ -21,6 +21,7 @@ interface Props {
   geometryLoading?: boolean
   apiBaseUrl?: string
   isLoading?: boolean
+  retrofitScenario?: any
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -29,7 +30,8 @@ const props = withDefaults(defineProps<Props>(), {
   geometryData: null,
   geometryLoading: false,
   apiBaseUrl: 'http://localhost:8080',
-  isLoading: false
+  isLoading: false,
+  retrofitScenario: null
 })
 
 // Load mock data from the sample JSON file
@@ -334,7 +336,7 @@ const exportData = () => {
                   v-model="showNormalized"
                 />
                 <Label for="normalized-switch" class="text-sm">
-                  {{ showNormalized ? 'Pro m²' : 'Gesamt' }}
+                  {{ showNormalized ? 'Pro m² NGF' : 'Gesamt' }}
                 </Label>
               </div>
             </div>
@@ -363,10 +365,10 @@ const exportData = () => {
         <CardHeader>
           <CardTitle class="flex items-center space-x-2">
             <Building class="h-5 w-5" />
-            <span>3D-Gebäudevisualisierung</span>
+            <span></span>
           </CardTitle>
           <CardDescription>
-            Interaktive 3D-Darstellung der analysierten Gebäude
+
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -401,16 +403,19 @@ const exportData = () => {
         </CardHeader>
         <CardContent>
           <div class="text-2xl font-bold">
-            {{ formatNumber(summaryData.endDemand.scenario) }}
+            {{ formatNumber(props.retrofitScenario ? summaryData.endDemand.scenario : summaryData.endDemand.statusQuo) }}
           </div>
           <p class="text-xs text-muted-foreground">
             {{ showNormalized ? 'kWh/m²a' : 'kWh/a' }}
           </p>
-          <div class="mt-2 text-sm">
+          <div v-if="props.retrofitScenario" class="mt-2 text-sm">
             <span :class="summaryData.endDemand.improvement > 0 ? 'text-green-600' : 'text-red-600'">
               {{ summaryData.endDemand.improvement > 0 ? '-' : '+' }}{{ formatNumber(Math.abs(summaryData.endDemand.improvement)) }}%
             </span>
             <span class="text-muted-foreground ml-1">vs. Status Quo</span>
+          </div>
+          <div v-else class="mt-2 text-sm text-muted-foreground">
+
           </div>
         </CardContent>
       </Card>
@@ -422,16 +427,19 @@ const exportData = () => {
         </CardHeader>
         <CardContent>
           <div class="text-2xl font-bold">
-            {{ formatNumber(summaryData.netDemand.scenario) }}
+            {{ formatNumber(props.retrofitScenario ? summaryData.netDemand.scenario : summaryData.netDemand.statusQuo) }}
           </div>
           <p class="text-xs text-muted-foreground">
             {{ showNormalized ? 'kWh/m²a' : 'kWh/a' }}
           </p>
-          <div class="mt-2 text-sm">
+          <div v-if="props.retrofitScenario" class="mt-2 text-sm">
             <span :class="summaryData.netDemand.improvement > 0 ? 'text-green-600' : 'text-red-600'">
               {{ summaryData.netDemand.improvement > 0 ? '-' : '+' }}{{ formatNumber(Math.abs(summaryData.netDemand.improvement)) }}%
             </span>
             <span class="text-muted-foreground ml-1">vs. Status Quo</span>
+          </div>
+          <div v-else class="mt-2 text-sm text-muted-foreground">
+
           </div>
         </CardContent>
       </Card>
@@ -443,16 +451,19 @@ const exportData = () => {
         </CardHeader>
         <CardContent>
           <div class="text-2xl font-bold">
-            {{ formatNumber(summaryData.primaryEnergy.scenario) }}
+            {{ formatNumber(props.retrofitScenario ? summaryData.primaryEnergy.scenario : summaryData.primaryEnergy.statusQuo) }}
           </div>
           <p class="text-xs text-muted-foreground">
             {{ showNormalized ? 'kWh/m²a' : 'kWh/a' }}
           </p>
-          <div class="mt-2 text-sm">
+          <div v-if="props.retrofitScenario" class="mt-2 text-sm">
             <span :class="summaryData.primaryEnergy.improvement > 0 ? 'text-green-600' : 'text-red-600'">
               {{ summaryData.primaryEnergy.improvement > 0 ? '-' : '+' }}{{ formatNumber(Math.abs(summaryData.primaryEnergy.improvement)) }}%
             </span>
             <span class="text-muted-foreground ml-1">vs. Status Quo</span>
+          </div>
+          <div v-else class="mt-2 text-sm text-muted-foreground">
+
           </div>
         </CardContent>
       </Card>
