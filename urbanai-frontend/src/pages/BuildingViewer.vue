@@ -1389,13 +1389,13 @@ const isDataComplete = computed(() => {
                     class="flex items-center space-x-2"
                   >
                     <Plus class="h-4 w-4" />
-                    <span>Sanierungszenario hinzufügen</span>
+                    <span>Sanierungsszenario hinzufügen</span>
                   </Button>
                 </SheetTrigger>
                 
                 <SheetContent side="right" class="!w-[480px] sm:!w-[650px] !max-w-none flex flex-col">
                   <SheetHeader>
-                    <SheetTitle>Sanierungszenario hinzufügen</SheetTitle>
+                    <SheetTitle>Sanierungsszenario hinzufügen</SheetTitle>
                     <SheetDescription>
                       Wählen Sie geeignete Maßnahmen zur Gebäudehülle und Wärmeversorgung im Rahmen der Gebäudesanierung aus.
                     </SheetDescription>

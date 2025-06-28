@@ -117,7 +117,8 @@ const chartData = computed(() => {
     showNormalized: showNormalized.value,
     valueType: showNormalized.value ? 'normalized' : 'total_area_adjusted',
     availableIndicators: results ? Object.keys(results) : null,
-    indicatorData: results?.[selectedIndicator.value]
+    indicatorData: results?.[selectedIndicator.value],
+    hasRetrofitScenario: !!props.retrofitScenario
   })
   
   if (!results || !results[selectedIndicator.value]) {
@@ -133,7 +134,8 @@ const chartData = computed(() => {
     valueType,
     indicatorData,
     statusQuo: indicatorData.status_quo,
-    scenario: indicatorData.scenario
+    scenario: indicatorData.scenario,
+    hasRetrofitScenario: !!props.retrofitScenario
   })
   
   // Extract status quo and scenario data
@@ -144,6 +146,22 @@ const chartData = computed(() => {
   if (selectedIndicator.value === 'end_demand') {
     const categories = ['end_heating_demand', 'end_dhw_demand', 'electricity_demand', 'end_demand_total']
     const labels = ['Heizung', 'Warmwasser', 'Strom', 'Gesamt']
+    
+    if (!props.retrofitScenario) {
+      // Show only status quo data
+      return {
+        labels,
+        datasets: [
+          {
+            label: `Status Quo`,
+            data: categories.map(cat => statusQuoData[cat]?.[valueType] || 0),
+            backgroundColor: '#6B7280',
+            borderColor: '#4B5563',
+            borderWidth: 1
+          }
+        ]
+      }
+    }
     
     return {
       labels,
@@ -168,6 +186,22 @@ const chartData = computed(() => {
     const categories = ['net_heating_demand', 'net_dhw_demand', 'net_demand_total']
     const labels = ['Heizung', 'Warmwasser', 'Gesamt']
     
+    if (!props.retrofitScenario) {
+      // Show only status quo data
+      return {
+        labels,
+        datasets: [
+          {
+            label: `Status Quo`,
+            data: categories.map(cat => statusQuoData[cat]?.[valueType] || 0),
+            backgroundColor: '#6B7280',
+            borderColor: '#4B5563',
+            borderWidth: 1
+          }
+        ]
+      }
+    }
+    
     return {
       labels,
       datasets: [
@@ -189,6 +223,20 @@ const chartData = computed(() => {
     }
   } else {
     // For simple indicators like pe_total, pert, penrt
+    if (!props.retrofitScenario) {
+      // Show only status quo data
+      return {
+        labels: ['Status Quo'],
+        datasets: [{
+          label: `${energyIndicators.find(i => i.key === selectedIndicator.value)?.label}`,
+          data: [statusQuoData[valueType] || 0],
+          backgroundColor: ['#6B7280'],
+          borderColor: ['#4B5563'],
+          borderWidth: 1
+        }]
+      }
+    }
+    
     return {
       labels: ['Status Quo', 'Szenario'],
       datasets: [{
@@ -302,7 +350,7 @@ const exportData = () => {
             <span>{{ energyIndicators.find(i => i.key === selectedIndicator)?.label }}</span>
           </CardTitle>
           <CardDescription>
-            Vergleich zwischen Status Quo und Sanierungsszenario
+            {{ props.retrofitScenario ? 'Vergleich zwischen Status Quo und Sanierungsszenario' : 'Status Quo Werte' }}
           </CardDescription>
         </CardHeader>
         <CardContent>
