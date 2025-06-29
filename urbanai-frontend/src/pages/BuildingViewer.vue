@@ -938,10 +938,10 @@ const removeRetrofitScenario = () => {
     try {
       toast('Sanierungszenario gelöscht', {
         description: 'Das Sanierungszenario wurde erfolgreich entfernt und die Baseline-Analyse wird gestartet.',
-        action: {
-          label: 'Rückgängig',
-          onClick: () => undoDeleteScenario()
-        },
+        // action: {
+        //   label: 'Rückgängig',
+        //   onClick: () => undoDeleteScenario()
+        // },
         duration: 5000
       })
     } catch (toastErr) {
@@ -1799,7 +1799,7 @@ const getBaufachlicheMoeglichkeitenArrow = (value: string) => {
                           </div>
                         </div>
                         <div v-if="retrofitScenario?.hvac && retrofitScenario?.hvac_year">
-                          <span class="font-medium">TGA ({{ retrofitScenario?.hvac_year }}):</span> {{ retrofitScenario?.hvac?.hvac_name }}
+                          <span class="font-medium">Wärmeversorgung ({{ retrofitScenario?.hvac_year }}):</span> {{ retrofitScenario?.hvac?.hvac_name }}
                         </div>
                         <div v-if="!retrofitScenario?.energy_standard && !retrofitScenario?.hvac" class="text-muted-foreground">
                           Keine Maßnahmen ausgewählt
@@ -1825,7 +1825,7 @@ const getBaufachlicheMoeglichkeitenArrow = (value: string) => {
                     <SheetHeader>
                       <SheetTitle>Sanierungszenario bearbeiten</SheetTitle>
                       <SheetDescription>
-                        Bearbeiten Sie die Konstruktions- und TGA-Maßnahmen für die Gebäudesanierung.
+                        Bearbeiten Sie die Konstruktions- und Wärmeversorgungs-Maßnahmen für die Gebäudesanierung.
                       </SheetDescription>
                     </SheetHeader>
                     
@@ -1930,7 +1930,7 @@ const getBaufachlicheMoeglichkeitenArrow = (value: string) => {
                               <Label for="hvac-type-select-edit">Auswahl des Systems</Label>
                               <Select v-model="selectedHVACType">
                                 <SelectTrigger id="hvac-type-select-edit">
-                                  <SelectValue placeholder="Wählen Sie TGA-Typ..." />
+                                  <SelectValue placeholder="Wählen Sie Wärmeversorgungs-Typ..." />
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectItem

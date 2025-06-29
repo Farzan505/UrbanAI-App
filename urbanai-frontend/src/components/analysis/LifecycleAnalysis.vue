@@ -998,9 +998,6 @@ const analyzeWithConstructions = async () => {
     // Close the sheet
     isConstructionSheetOpen.value = false
 
-    toast.success('Konstruktionsanalyse erfolgreich', {
-      description: 'Die Lebenszyklusanalyse wurde mit den ausgewählten Konstruktionen durchgeführt.'
-    })
 
   } catch (err) {
     console.error('❌ Construction analysis error:', err)

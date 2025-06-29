@@ -871,7 +871,7 @@ const selectDetailYear = (year: number) => {
           <CardHeader>
             <CardTitle class="flex items-center space-x-2">
               <Euro class="h-5 w-5 text-orange-600" />
-              <span>CO₂-Äq Vermeidungskosten</span>
+              <span>CO₂-Äq Bepreisung</span>
             </CardTitle>
           </CardHeader>
           <CardContent>

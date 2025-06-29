@@ -665,9 +665,9 @@ export function useRetrofitAnalysis() {
         ? 'Die Sanierungsanalyse wurde erfolgreich durchgeführt.'
         : 'Die Status-Quo-Analyse wurde erfolgreich durchgeführt.'
       
-      toast.success('Analyse erfolgreich', {
-        description: message
-      })
+      // toast.success('Analyse erfolgreich', {
+      //   description: message
+      // })
 
     } catch (err) {
       console.error('❌ Retrofit analysis error:', err)
