@@ -786,12 +786,12 @@ const buildingSurfaceAreas = computed(() => {
     
     // German translations for surface types
     const surfaceLabels: { [key: string]: string } = {
-      'buildingwallsurface_area': 'Außenwandfläche (inkl. Fenster)',
+      'buildingwallsurface_area': 'Außenwandfläche',
       'buildingroofsurface_area': 'Dachfläche', 
       'buildinggroundsurface_area': 'Bodenfläche',
       'buildingwindowsurface_area': 'Fensterfläche',
-      'buildingwallsurface_adiabatic_area': 'Außenwandfläche (gemeinsame Flächen inkl. Fenster)',
-      'buildingwallsurface_nonadiabatic_area': 'Außenwandfläche (nicht gemeinsame Flächen inkl. Fenster)',
+      'buildingwallsurface_adiabatic_area': 'Außenwandfläche (gemeinsame Flächen)',
+      'buildingwallsurface_nonadiabatic_area': 'Außenwandfläche (nicht gemeinsame Flächen)',
       'total_bgf': 'Bruttogrundfläche',
       'total_ngf': 'Nettogrundfläche',
       'total_built_area': 'Bebaute Fläche'
@@ -1320,6 +1320,25 @@ const getZustandsbewertungArrow = (value: string) => {
       return '↑'
     default:
       return '→'
+  }
+}
+
+const getVerbesserungspotenzialColor = (value: string) => {
+  if (!value || value === 'keine Info vorhanden') return 'text-gray-500'
+  
+  switch (value) {
+    case 'kaum Verbesserungspotenzial':
+      return 'text-green-600'
+    case 'geringes Verbesserungspotenzial':
+      return 'text-green-400'
+    case 'mittleres Verbesserungspotenzial':
+      return 'text-yellow-500'
+    case 'hohes Verbesserungspotenzial':
+      return 'text-red-400'
+    case 'sehr hohes Verbesserungspotenzial':
+      return 'text-red-600'
+    default:
+      return 'text-gray-500'
   }
 }
 
