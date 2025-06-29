@@ -38,19 +38,62 @@ ChartJS.register(
 // Reactive state
 const useScenario = ref(false)
 
+// Toggle for per NGF vs Total display
+const showPerNGF = ref(true) // Default to per NGF (current behavior)
+
 // Detailed view state
 const showDetailedView = ref(false)
 const selectedDetailYear = ref<number | null>(null)
 
-// Props interface for receiving emission data
+// Props interface for receiving emission data and geometry data
 interface Props {
   emissionData?: any
+  geometryData?: any
 }
 
 const props = defineProps<Props>()
 
+// Get total NGF from geometry data
+const totalNGF = computed(() => {
+  const geometryResults = props.geometryData?.results || props.geometryData
+  if (!geometryResults) return null
+  
+  // Check different possible locations for summed_surface_areas
+  let areas = null
+  if (geometryResults.summed_surface_areas) {
+    areas = geometryResults.summed_surface_areas
+  } else {
+    // Look for it in nested structure (GML ID based)
+    for (const key in geometryResults) {
+      if (geometryResults[key]?.summed_surface_areas) {
+        areas = geometryResults[key].summed_surface_areas
+        break
+      }
+    }
+  }
+  
+  return areas?.total_ngf || null
+})
+
+// Helper function to convert values based on toggle
+const convertValue = (value: number): number => {
+  if (showPerNGF.value || !totalNGF.value) {
+    return value
+  }
+  return value * totalNGF.value
+}
+
+// Helper function to get the correct unit label
+const getUnitLabel = (baseUnit: string): string => {
+  if (showPerNGF.value) {
+    return baseUnit
+  }
+  // Remove the "/m²" part for total values
+  return baseUnit.replace('/m²', ' (gesamt)')
+}
+
 // Chart options for reduction path
-const reductionPathOptions = {
+const reductionPathOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
@@ -70,7 +113,8 @@ const reductionPathOptions = {
       intersect: false,
       callbacks: {
         label: function(context: any) {
-          return `${context.dataset.label}: ${context.parsed.y.toFixed(2)} kg CO₂-Äq/m²`
+          const unit = getUnitLabel('kg CO₂-Äq/m²')
+          return `${context.dataset.label}: ${context.parsed.y.toFixed(2)} ${unit}`
         }
       }
     }
@@ -91,7 +135,7 @@ const reductionPathOptions = {
     y: {
       title: {
         display: true,
-        text: 'CO₂-Emissionen (kg CO₂-Äq/m²)'
+        text: getUnitLabel('CO₂-Emissionen (kg CO₂-Äq/m²)')
       },
       beginAtZero: true
     }
@@ -101,10 +145,10 @@ const reductionPathOptions = {
       tension: 0.1
     }
   }
-}
+}))
 
 // Chart options for scope emissions (bar chart)
-const scopeEmissionsOptions = {
+const scopeEmissionsOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
@@ -121,7 +165,13 @@ const scopeEmissionsOptions = {
     },
     tooltip: {
       mode: 'index' as const,
-      intersect: false
+      intersect: false,
+      callbacks: {
+        label: function(context: any) {
+          const unit = getUnitLabel('kg CO₂-Äq/m²')
+          return `${context.dataset.label}: ${context.parsed.y.toFixed(2)} ${unit}`
+        }
+      }
     }
   },
   scales: {
@@ -142,16 +192,16 @@ const scopeEmissionsOptions = {
     y: {
       title: {
         display: true,
-        text: 'Emissionen (kg CO₂-Äq)'
+        text: getUnitLabel('Emissionen (kg CO₂-Äq/m²)')
       },
       stacked: true,
       beginAtZero: true
     }
   }
-}
+}))
 
 // Chart options for costs
-const costsOptions = {
+const costsOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
@@ -171,7 +221,8 @@ const costsOptions = {
       intersect: false,
       callbacks: {
         label: function(context: any) {
-          return `${context.dataset.label}: €${context.parsed.y.toFixed(2)}`
+          const unit = getUnitLabel('€/m²')
+          return `${context.dataset.label}: €${context.parsed.y.toFixed(2)} ${unit.replace('€/m²', '').replace(' (gesamt)', '')}`
         }
       }
     }
@@ -193,12 +244,12 @@ const costsOptions = {
     y: {
       title: {
         display: true,
-        text: 'Kosten (€/m²)'
+        text: getUnitLabel('Kosten (€/m²)')
       },
       beginAtZero: true
     }
   }
-}
+}))
 
 // No longer loading sample data - using real API response data
 
@@ -214,6 +265,18 @@ watch(useScenario, (newValue) => {
   console.log('🔄 Scenario activated:', scenarioActivated.value)
   
   // Reset detailed view when switching scenarios
+  if (showDetailedView.value) {
+    showDetailedView.value = false
+    selectedDetailYear.value = null
+  }
+})
+
+// Watch for per NGF toggle changes
+watch(showPerNGF, (newValue) => {
+  console.log('📊 Unit display toggled to:', newValue ? 'Per NGF' : 'Total')
+  console.log('📊 Total NGF available:', totalNGF.value)
+  
+  // Reset detailed view when switching units
   if (showDetailedView.value) {
     showDetailedView.value = false
     selectedDetailYear.value = null
@@ -265,7 +328,10 @@ const reductionPathData = computed(() => {
   }
 
   const reductionYears = Object.keys(results.reduction_path).map(Number).sort()
-  const reductionValues = reductionYears.map(year => results.reduction_path[year.toString()])
+  const reductionValues = reductionYears.map(year => {
+    const value = results.reduction_path[year.toString()]
+    return showPerNGF.value || !totalNGF.value ? value : value * totalNGF.value
+  })
 
   const datasets: any[] = [
     {
@@ -288,9 +354,12 @@ const reductionPathData = computed(() => {
       if (results.co2_emissions_heating_dhw.profile_status_quo) {
         const statusQuoProfile = results.co2_emissions_heating_dhw.profile_status_quo
         const statusQuoYears = Object.keys(statusQuoProfile).map(Number).sort()
-        const statusQuoValues = statusQuoYears.map(year => statusQuoProfile[year.toString()])
+        const statusQuoValues = statusQuoYears.map(year => {
+          const value = statusQuoProfile[year.toString()]
+          return showPerNGF.value || !totalNGF.value ? value : value * totalNGF.value
+        })
 
-        console.log('🔥 Status quo heating/DHW:', { years: statusQuoYears, values: statusQuoValues })
+        console.log('�� Status quo heating/DHW:', { years: statusQuoYears, values: statusQuoValues })
 
         datasets.push({
           label: 'CO₂-Äq Heizen/Warmwasser (Status Quo)',
@@ -308,7 +377,10 @@ const reductionPathData = computed(() => {
       if (results.co2_emissions_heating_dhw.profile_combined) {
         const combinedProfile = results.co2_emissions_heating_dhw.profile_combined
         const combinedYears = Object.keys(combinedProfile).map(Number).sort()
-        const combinedValues = combinedYears.map(year => combinedProfile[year.toString()])
+        const combinedValues = combinedYears.map(year => {
+          const value = combinedProfile[year.toString()]
+          return showPerNGF.value || !totalNGF.value ? value : value * totalNGF.value
+        })
 
         console.log('🔥 Combined heating/DHW:', { years: combinedYears, values: combinedValues })
 
@@ -431,7 +503,8 @@ const scopeEmissionsData = computed(() => {
         const lca_wall = scopeValues.lca_wall?.[dateKey] || 0
         const lca_hvac = scopeValues.lca_hvac?.[dateKey] || 0
         
-        return heating + dhw + electricity + lca_base + lca_roof + lca_window + lca_wall + lca_hvac
+        const totalValue = heating + dhw + electricity + lca_base + lca_roof + lca_window + lca_wall + lca_hvac
+        return showPerNGF.value || !totalNGF.value ? totalValue : totalValue * totalNGF.value
       })
 
       datasets.push({
@@ -473,7 +546,10 @@ const co2CostsData = computed(() => {
     .map(key => parseInt(key))
     .sort((a, b) => a - b)
   
-  const values = years.map(year => profile[year.toString()])
+  const values = years.map(year => {
+    const value = profile[year.toString()]
+    return showPerNGF.value || !totalNGF.value ? value : value * totalNGF.value
+  })
 
   console.log('💰 CO2 costs chart data:', { profileToShow, years, values, hasData: values.length > 0 })
 
@@ -515,7 +591,10 @@ const operationCostsData = computed(() => {
     .map(key => parseInt(key))
     .sort((a, b) => a - b)
     
-  const values = years.map(year => profile[year.toString()])
+  const values = years.map(year => {
+    const value = profile[year.toString()]
+    return showPerNGF.value || !totalNGF.value ? value : value * totalNGF.value
+  })
 
   console.log('⚡ Operation costs chart data:', { profileToShow, years, values, hasData: values.length > 0 })
 
@@ -611,7 +690,8 @@ const detailedScopeEmissionsData = computed(() => {
   availableCategories.forEach(category => {
     const categoryValues = scopes.map(scopeKey => {
       const scopeValues = profileData[scopeKey]
-      return scopeValues?.[category]?.[dateKey] || 0
+      const value = scopeValues?.[category]?.[dateKey] || 0
+      return showPerNGF.value || !totalNGF.value ? value : value * totalNGF.value
     })
 
     datasets.push({
@@ -683,18 +763,36 @@ const selectDetailYear = (year: number) => {
         <h2 class="text-2xl font-semibold">Dekarbonisierung</h2>
         <Badge v-if="scenarioActivated" variant="default">Szenario verfügbar</Badge>
         <Badge v-else variant="secondary">Nur Status Quo</Badge>
+        <Badge v-if="totalNGF" variant="outline" class="text-xs">
+          NGF: {{ totalNGF.toFixed(0) }} m²
+        </Badge>
       </div>
       
-      <!-- Toggle Switch -->
-      <div v-if="scenarioActivated" class="flex items-center space-x-3">
-        <Label for="scenario-toggle" class="text-sm font-medium">
-          {{ useScenario ? 'Szenario' : 'Status Quo' }}
-        </Label>
-        <Switch 
-          id="scenario-toggle"
-          v-model="useScenario"
-          :disabled="!scenarioActivated"
-        />
+      <!-- Toggle Switches -->
+      <div class="flex items-center space-x-6">
+        <!-- Per NGF vs Total Toggle -->
+        <div class="flex items-center space-x-3">
+          <Label for="unit-toggle" class="text-sm font-medium">
+            {{ showPerNGF ? 'Pro m² NGF' : 'Gesamt' }}
+          </Label>
+          <Switch 
+            id="unit-toggle"
+            v-model="showPerNGF"
+            :disabled="!totalNGF"
+          />
+        </div>
+        
+        <!-- Scenario Toggle -->
+        <div v-if="scenarioActivated" class="flex items-center space-x-3">
+          <Label for="scenario-toggle" class="text-sm font-medium">
+            {{ useScenario ? 'Szenario' : 'Status Quo' }}
+          </Label>
+          <Switch 
+            id="scenario-toggle"
+            v-model="useScenario"
+            :disabled="!scenarioActivated"
+          />
+        </div>
       </div>
     </div>
 
@@ -733,6 +831,9 @@ const selectDetailYear = (year: number) => {
       <p>Debug: Emission data available: {{ !!emissionResults }}</p>
       <p>Scenario activated: {{ scenarioActivated }}</p>
       <p>Current profile: {{ profileKey }}</p>
+      <p>Show per NGF: {{ showPerNGF }}</p>
+      <p>Total NGF: {{ totalNGF }}</p>
+      <p>Unit label example: {{ getUnitLabel('kg CO₂-Äq/m²') }}</p>
       <p>Has reduction path: {{ !!emissionResults?.reduction_path }}</p>
       <p>Has scope emissions: {{ !!emissionResults?.scope_emissions }}</p>
       <p>Has CO2 costs: {{ !!emissionResults?.co2_costs_tax }}</p>

@@ -2489,6 +2489,7 @@ const getBaufachlicheMoeglichkeitenArrow = (value: string) => {
           <div v-else-if="activeAnalysisTab === 'dekarbonisierung'">
             <Dekarbonisierung 
               :emission-data="retrofitAnalysisResult?.data?.emission_results || null"
+              :geometry-data="geometryData"
             />
           </div>
         </div>
