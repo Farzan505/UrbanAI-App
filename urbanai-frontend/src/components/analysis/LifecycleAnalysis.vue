@@ -281,15 +281,16 @@ const buildingLevelData = computed(() => {
   const summaryData = effectiveSummaryData.value
   if (!summaryData) return null
 
-  // Get investment costs and LCA impacts from summary
+  // Get investment costs, lifecycle costs, and LCA impacts from summary
   const investmentCosts = summaryData.investment_costs || {}
   const lcaImpacts = summaryData.lca_impacts || {}
-  const lifecycleCosts = summaryData.lifecycle_costs || {}
+  const lifecycleCosts = summaryData.lifecycle_costs?.lcc_costs || {}
   const ngfArea = summaryData.building_info?.ngf_area_sqm || 0
 
   // Building components (excluding hvac)
   const components = ['facade', 'roof', 'base', 'window']
-  let totalCost = 0
+  let totalInvestmentCost = 0
+  let totalLifecycleCost = 0
   let totalGWP = 0
   let totalPERT = 0
   let totalPENRT = 0
@@ -297,10 +298,16 @@ const buildingLevelData = computed(() => {
   const componentData = components.map(component => {
     // Investment costs
     const investmentData = investmentCosts[component] || {}
-    const totalCostValue = investmentData.total_euro || 0
-    const costPerM2Value = investmentData.per_sqm_ngf_euro || 0
+    const totalInvestmentValue = investmentData.total_euro || 0
+    const investmentPerM2Value = investmentData.per_sqm_ngf_euro || 0
     const area = investmentData.area_sqm || 0
-    totalCost += totalCostValue
+    totalInvestmentCost += totalInvestmentValue
+
+    // Lifecycle costs
+    const lifecycleData = lifecycleCosts[component] || {}
+    const totalLifecycleValue = lifecycleData.total_euro || 0
+    const lifecyclePerM2Value = lifecycleData.per_sqm_ngf_euro || 0
+    totalLifecycleCost += totalLifecycleValue
 
     // LCA impacts
     const lcaData = lcaImpacts[component] || {}
@@ -322,7 +329,11 @@ const buildingLevelData = computed(() => {
     return {
       name: getComponentLabel(component),
       component,
-      cost: showPerM2.value ? costPerM2Value : totalCostValue,
+      // Store both investment and lifecycle costs
+      investmentCost: showPerM2.value ? investmentPerM2Value : totalInvestmentValue,
+      lifecycleCost: showPerM2.value ? lifecyclePerM2Value : totalLifecycleValue,
+      // Legacy cost field for backward compatibility - will be set based on active tab
+      cost: 0, // Will be set below
       gwptotal_a2: showPerM2.value ? gwpPerM2 : gwpTotal,
       gwp: showPerM2.value ? gwpPerM2 : gwpTotal,
       pert: showPerM2.value ? (pertPerM2 * 0.277778) : (pertTotal * 0.277778),
@@ -335,9 +346,13 @@ const buildingLevelData = computed(() => {
 
   // Add HVAC data
   const hvacInvestment = investmentCosts.hvac || {}
+  const hvacLifecycle = lifecycleCosts.hvac || {}
   const hvacLca = lcaImpacts.hvac || {}
-  const hvacCost = hvacInvestment.total_euro || 0
-  const hvacCostPerM2 = hvacInvestment.per_sqm_ngf_euro || 0
+  
+  const hvacInvestmentCost = hvacInvestment.total_euro || 0
+  const hvacInvestmentCostPerM2 = hvacInvestment.per_sqm_ngf_euro || 0
+  const hvacLifecycleCost = hvacLifecycle.total_euro || 0
+  const hvacLifecycleCostPerM2 = hvacLifecycle.per_sqm_ngf_euro || 0
   const hvacPower = hvacInvestment.power_kw || 0
 
   const hvacGwpData = hvacLca.gwptotal_a2 || {}
@@ -351,7 +366,8 @@ const buildingLevelData = computed(() => {
   const hvacPenrt = hvacPenrtData.total || 0
   const hvacPenrtPerM2 = hvacPenrtData.per_sqm_ngf || 0
 
-  totalCost += hvacCost
+  totalInvestmentCost += hvacInvestmentCost
+  totalLifecycleCost += hvacLifecycleCost
   totalGWP += hvacGwp
   totalPERT += (hvacPert * 0.277778) // Convert MJ to kWh
   totalPENRT += (hvacPenrt * 0.277778) // Convert MJ to kWh
@@ -360,7 +376,11 @@ const buildingLevelData = computed(() => {
   componentData.push({
     name: getComponentLabel('hvac'),
     component: 'hvac',
-    cost: showPerM2.value ? hvacCostPerM2 : hvacCost,
+    // Store both investment and lifecycle costs
+    investmentCost: showPerM2.value ? hvacInvestmentCostPerM2 : hvacInvestmentCost,
+    lifecycleCost: showPerM2.value ? hvacLifecycleCostPerM2 : hvacLifecycleCost,
+    // Legacy cost field for backward compatibility - will be set below
+    cost: 0, // Will be set below
     gwptotal_a2: showPerM2.value ? hvacGwpPerM2 : hvacGwp,
     gwp: showPerM2.value ? hvacGwpPerM2 : hvacGwp,
     pert: showPerM2.value ? (hvacPertPerM2 * 0.277778) : (hvacPert * 0.277778), // Convert MJ to kWh
@@ -370,10 +390,25 @@ const buildingLevelData = computed(() => {
     uValueNew: 0
   })
 
+  // Set the cost field based on active tab for backward compatibility
+  componentData.forEach(component => {
+    if (activeTab.value === 'lcc') {
+      component.cost = component.lifecycleCost
+    } else {
+      component.cost = component.investmentCost
+    }
+  })
+
   return {
     components: componentData,
     totals: {
-      cost: showPerM2.value && ngfArea > 0 ? totalCost / ngfArea : totalCost,
+      // Include both investment and lifecycle costs in totals
+      investmentCost: showPerM2.value && ngfArea > 0 ? totalInvestmentCost / ngfArea : totalInvestmentCost,
+      lifecycleCost: showPerM2.value && ngfArea > 0 ? totalLifecycleCost / ngfArea : totalLifecycleCost,
+      // Legacy cost field for backward compatibility
+      cost: activeTab.value === 'lcc' 
+        ? (showPerM2.value && ngfArea > 0 ? totalLifecycleCost / ngfArea : totalLifecycleCost)
+        : (showPerM2.value && ngfArea > 0 ? totalInvestmentCost / ngfArea : totalInvestmentCost),
       gwp: showPerM2.value && ngfArea > 0 ? totalGWP / ngfArea : totalGWP,
       pert: showPerM2.value && ngfArea > 0 ? totalPERT / ngfArea : totalPERT,
       penrt: showPerM2.value && ngfArea > 0 ? totalPENRT / ngfArea : totalPENRT,

@@ -794,14 +794,15 @@ const buildingSurfaceAreas = computed(() => {
       'buildingwallsurface_nonadiabatic_area': 'Außenwandfläche (nicht gemeinsame Flächen)',
       'total_bgf': 'Bruttogrundfläche',
       'total_ngf': 'Nettogrundfläche',
-      'total_built_area': 'Bebaute Fläche'
+      'total_built_area': 'Bebaute Fläche',
+      'a_ngf': 'Gebäudehülle zu Nettogrundfläche'
     }
     
     // Convert to array with German labels and formatted values
     const result = Object.entries(areas).map(([key, value]) => ({
       label: surfaceLabels[key] || key,
       value: typeof value === 'number' ? value.toFixed(2) : 'N/A',
-      unit: 'm²'
+      unit: key === 'a_ngf' ? '[-]' : 'm²'
     }))
     
     console.log('🏢 Processed surface areas:', result)
@@ -1043,13 +1044,13 @@ const translateFieldName = (fieldName: string): string => {
     'epl': 'Einzelpan',
     'bgf': 'Bruttogrundfläche',
     'ngf': 'Nettogrundfläche',
-    'babez': 'Baualtersklasse',
+    'babez': 'Bauamtbezeichnung',
     'ligbez': 'Liegenschaftsbezeichnung',
     'gebzabt': 'Gebäudezuordnung',
     'enob_category': 'EnOB-Kategorie',
     'sq_standard': 'Status Quo Standard',
     'is_heritage': 'Denkmalschutz',
-    'versorgung_emis_mp': 'Versorgung'
+    'current_system_type': 'Wärmeversorgung'
   }
   
   return fieldTranslations[fieldName] || fieldName
@@ -1326,20 +1327,21 @@ const getZustandsbewertungArrow = (value: string) => {
 const getVerbesserungspotenzialColor = (value: string) => {
   if (!value || value === 'keine Info vorhanden') return 'text-gray-500'
   
-  switch (value) {
+    switch (value) {
     case 'kaum Verbesserungspotenzial':
-      return 'text-green-600'
+      return 'text-red-600'
     case 'geringes Verbesserungspotenzial':
-      return 'text-green-400'
+      return 'text-red-400'
     case 'mittleres Verbesserungspotenzial':
       return 'text-yellow-500'
     case 'hohes Verbesserungspotenzial':
-      return 'text-red-400'
+      return 'text-green-400'
     case 'sehr hohes Verbesserungspotenzial':
-      return 'text-red-600'
+      return 'text-green-600'
     default:
       return 'text-gray-500'
   }
+
 }
 
 const getVerbesserungspotenzialArrow = (value: string) => {
@@ -2068,7 +2070,7 @@ const getBaufachlicheMoeglichkeitenArrow = (value: string) => {
                       
                       <!-- CO2 Cost Scenario Selection -->
                       <div class="space-y-2">
-                        <Label for="co2-cost-scenario">Vermeidungskosten</Label>
+                        <Label for="co2-cost-scenario">CO₂-Bepreisung</Label>
                         <Select v-model="tempSelectedCo2CostScenario">
                           <SelectTrigger id="co2-cost-scenario">
                             <SelectValue placeholder="Wählen Sie ein Kostenszenario..." />
@@ -2164,18 +2166,18 @@ const getBaufachlicheMoeglichkeitenArrow = (value: string) => {
                           <div class="grid grid-cols-1 gap-2 text-sm">
                             <div class="flex justify-between">
                               <span class="font-medium text-gray-600">Bauwerkszuordnung:</span>
-                              <span class="text-gray-900">{{ formatDisplayValue(buildingData.buildings_assumptions.bwz_category) }}</span>
+                              <span class="text-gray-900">{{ formatDisplayValue(buildingData.buildings_assumptions.bwzbez) }}</span>
                             </div>
                             <div class="flex justify-between">
                               <span class="font-medium text-gray-600">Bautypologie (EnOB:DataNWG):</span>
                               <span class="text-gray-900">{{ formatDisplayValue(buildingData.buildings_assumptions.enob_category) }}</span>
                             </div>
                             <div class="flex justify-between">
-                              <span class="font-medium text-gray-600">Baualtersklasse (Originalzustand):</span>
+                              <span class="font-medium text-gray-600">Baualtersklasse/Energiestandard (Originalzustand):</span>
                               <span class="text-gray-900">{{ formatDisplayValue(buildingData.buildings_assumptions.bac) }}</span>
                             </div>
                             <div class="flex justify-between">
-                              <span class="font-medium text-gray-600">Baualtersklasse (Status Quo):</span>
+                              <span class="font-medium text-gray-600">Baualtersklasse/Energiestandard (Status Quo):</span>
                               <span class="text-gray-900">{{ formatDisplayValue(buildingData.buildings_assumptions.sq_standard) }}</span>
                             </div>
                             <div class="flex justify-between">
@@ -2184,7 +2186,7 @@ const getBaufachlicheMoeglichkeitenArrow = (value: string) => {
                             </div>
                             <div class="flex justify-between">
                               <span class="font-medium text-gray-600">Versorgung:</span>
-                              <span class="text-gray-900">{{ formatDisplayValue(buildingData.buildings_assumptions.versorgung_emis_mp) }}</span>
+                              <span class="text-gray-900">{{ formatDisplayValue(buildingData.buildings_assumptions.current_system_type) }}</span>
                             </div>
                           </div>
                         </div>
@@ -2259,7 +2261,7 @@ const getBaufachlicheMoeglichkeitenArrow = (value: string) => {
                               </div>
                               <div class="flex justify-between">
                                 <span class="font-medium text-gray-600">Wärmeversorgung aus EMIS:</span>
-                                <span class="text-gray-900">{{ formatDisplayValue(buildingData.buildings_assumptions.versorgung_emis_mp) }}</span>
+                                <span class="text-gray-900">{{ formatDisplayValue(buildingData.buildings_assumptions.current_system_type) }}</span>
                               </div>
                             </div>
                           </div>

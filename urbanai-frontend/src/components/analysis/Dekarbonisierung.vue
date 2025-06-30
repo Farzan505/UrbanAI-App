@@ -500,10 +500,10 @@ const scopeEmissionsData = computed(() => {
         const lca_base = scopeValues.lca_base?.[dateKey] || 0
         const lca_roof = scopeValues.lca_roof?.[dateKey] || 0
         const lca_window = scopeValues.lca_window?.[dateKey] || 0
-        const lca_wall = scopeValues.lca_wall?.[dateKey] || 0
+        const lca_facade = scopeValues.lca_facade?.[dateKey] || 0
         const lca_hvac = scopeValues.lca_hvac?.[dateKey] || 0
         
-        const totalValue = heating + dhw + electricity + lca_base + lca_roof + lca_window + lca_wall + lca_hvac
+        const totalValue = heating + dhw + electricity + lca_base + lca_roof + lca_window + lca_facade + lca_hvac
         return showPerNGF.value || !totalNGF.value ? totalValue : totalValue * totalNGF.value
       })
 
@@ -633,7 +633,7 @@ const detailedScopeEmissionsData = computed(() => {
 
   const dateKey = `${selectedDetailYear.value}-01-01`
   const baseCategories = ['heating', 'dhw', 'electricity']
-  const lcaCategories = ['lca_base', 'lca_roof', 'lca_window', 'lca_wall', 'lca_hvac']
+  const lcaCategories = ['lca_base', 'lca_roof', 'lca_window', 'lca_facade', 'lca_hvac']
   
   const categoryLabels = {
     heating: 'Heizen',
@@ -642,7 +642,7 @@ const detailedScopeEmissionsData = computed(() => {
     lca_base: 'Bodenplatte',
     lca_roof: 'Dach',
     lca_window: 'Fenster',
-    lca_wall: 'Außenwand',
+    lca_facade: 'Außenwand',
     lca_hvac: 'Wärmeversorgung'
   }
   const categoryColors = {
@@ -652,7 +652,7 @@ const detailedScopeEmissionsData = computed(() => {
     lca_base: { bg: 'rgba(168, 85, 247, 0.7)', border: 'rgb(168, 85, 247)' },
     lca_roof: { bg: 'rgba(236, 72, 153, 0.7)', border: 'rgb(236, 72, 153)' },
     lca_window: { bg: 'rgba(245, 158, 11, 0.7)', border: 'rgb(245, 158, 11)' },
-    lca_wall: { bg: 'rgba(34, 197, 94, 0.7)', border: 'rgb(34, 197, 94)' },
+    lca_facade: { bg: 'rgba(34, 197, 94, 0.7)', border: 'rgb(34, 197, 94)' },
     lca_hvac: { bg: 'rgba(99, 102, 241, 0.7)', border: 'rgb(99, 102, 241)' }
   }
 
