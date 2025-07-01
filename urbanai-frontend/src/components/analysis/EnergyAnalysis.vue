@@ -144,8 +144,8 @@ const chartData = computed(() => {
   
   // For complex indicators like end_demand and net_demand, we need to handle sub-categories
   if (selectedIndicator.value === 'end_demand') {
-    const categories = ['end_heating_demand', 'end_dhw_demand', 'electricity_demand', 'end_demand_total']
-    const labels = ['Heizung', 'Warmwasser', 'Strom', 'Gesamt']
+    const categories = ['end_heating_demand', 'end_dhw_demand', 'electricity_demand', 'end_demand_total_with_electricity']
+    const labels = ['Heizung', 'Warmwasser', 'Nutzerstrom', 'Gesamt']
     
     if (!props.retrofitScenario) {
       // Show only status quo data
@@ -298,9 +298,9 @@ const summaryData = computed(() => {
 
   return {
     endDemand: {
-      statusQuo: results.end_demand?.status_quo?.end_demand_total?.[valueType] || 0,
-      scenario: results.end_demand?.scenario?.end_demand_total?.[valueType] || 0,
-      improvement: results.end_demand?.difference?.end_demand_total?.[valueType]?.percentage || 0
+      statusQuo: results.end_demand?.status_quo?.end_demand_total_with_electricity?.[valueType] || 0,
+      scenario: results.end_demand?.scenario?.end_demand_total_with_electricity?.[valueType] || 0,
+      improvement: results.end_demand?.difference?.end_demand_total_with_electricity?.[valueType]?.percentage || 0
     },
     netDemand: {
       statusQuo: results.net_demand?.status_quo?.net_demand_total?.[valueType] || 0,

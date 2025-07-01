@@ -557,7 +557,7 @@ const co2CostsData = computed(() => {
     labels: years,
     datasets: [
       {
-        label: `CO₂-ÄqVermeidungskosten (${useScenario.value ? 'Szenario' : 'Status Quo'})`,
+        label: `CO₂-Äq Bepreisung (${useScenario.value ? 'Szenario' : 'Status Quo'})`,
         data: values,
         borderColor: 'rgb(234, 88, 12)',
         backgroundColor: 'rgba(234, 88, 12, 0.1)',

@@ -1050,7 +1050,8 @@ const translateFieldName = (fieldName: string): string => {
     'enob_category': 'EnOB-Kategorie',
     'sq_standard': 'Status Quo Standard',
     'is_heritage': 'Denkmalschutz',
-    'current_system_type': 'Wärmeversorgung'
+    'current_system_type': 'Wärmeversorgung',
+    'hvac': 'Wärmeversorgung'
   }
   
   return fieldTranslations[fieldName] || fieldName
@@ -2185,7 +2186,7 @@ const getBaufachlicheMoeglichkeitenArrow = (value: string) => {
                               <span class="text-gray-900 text-right">{{ formatDisplayValue(buildingData.buildings_assumptions.is_heritage) }}</span>
                             </div>
                             <div class="flex justify-between">
-                              <span class="font-medium text-gray-600">Versorgung:</span>
+                              <span class="font-medium text-gray-600">Wärmeversorgung:</span>
                               <span class="text-gray-900">{{ formatDisplayValue(buildingData.buildings_assumptions.current_system_type) }}</span>
                             </div>
                           </div>
