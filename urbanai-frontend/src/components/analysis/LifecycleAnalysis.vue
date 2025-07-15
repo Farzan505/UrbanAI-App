@@ -238,7 +238,7 @@ const lcaIndicators = [
 // Helper functions
 function getComponentLabel(key: string): string {
   const labels: Record<string, string> = {
-    facade: 'Fassade',
+    facade: 'Außenwand',
     roof: 'Dach',
     base: 'Bodenplatte',
     window: 'Fenster',
@@ -1609,11 +1609,11 @@ watch([() => props.lcaLccResults, () => props.summaryData], ([newLca, newSummary
               <div class="font-medium">{{ formatCurrency(componentLevelData.summary?.total_cost_euro) }}</div>
             </div>
             <div>
-              <div class="text-muted-foreground">U-Wert alt</div>
+              <div class="text-muted-foreground">U-Wert Status Quo</div>
               <div class="font-medium">{{ formatNumber(componentLevelData.summary?.u_value_old, 3) }} W/(m²·K)</div>
             </div>
             <div>
-              <div class="text-muted-foreground">U-Wert neu</div>
+              <div class="text-muted-foreground">U-Wert Sanierunsszenario</div>
               <div class="font-medium">{{ formatNumber(componentLevelData.summary?.u_value_new, 3) }} W/(m²·K)</div>
             </div>
           </div>

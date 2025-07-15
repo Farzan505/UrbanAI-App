@@ -461,17 +461,30 @@ const scopeEmissionsData = computed(() => {
     return null
   }
 
-  // Get years from any scope data - now handling object keys directly
-  const firstScope = Object.keys(profileData)[0]
-  const firstCategory = Object.keys(profileData[firstScope] || {})[0]
-  const sampleData = profileData[firstScope]?.[firstCategory] || {}
+  // Get years from any scope data - handling the actual API structure
+  // Find the first scope that has data to extract years
+  let years: number[] = []
+  const scopeKeys = Object.keys(profileData).filter(key => key.startsWith('Scope'))
   
-  // Extract years from date strings like "2020-01-01" and convert to numbers
-  const years = Object.keys(sampleData)
-    .map(dateStr => parseInt(dateStr.split('-')[0]))
-    .sort((a, b) => a - b)
+  for (const scopeKey of scopeKeys) {
+    const scopeData = profileData[scopeKey]
+    if (scopeData && typeof scopeData === 'object') {
+      // Look for any category (heating, dhw, electricity) to get years
+      const categories = ['heating', 'dhw', 'electricity', 'lca_base', 'lca_roof', 'lca_window', 'lca_facade', 'lca_hvac']
+      for (const category of categories) {
+        if (scopeData[category] && typeof scopeData[category] === 'object') {
+          years = Object.keys(scopeData[category])
+            .map(yearStr => parseInt(yearStr))
+            .filter(year => !isNaN(year))
+            .sort((a, b) => a - b)
+          break
+        }
+      }
+      if (years.length > 0) break
+    }
+  }
 
-  console.log('📊 Scope emissions:', { profileToShow, years, hasData: years.length > 0, profileData })
+  console.log('📊 Scope emissions:', { profileToShow, years, hasData: years.length > 0, scopeKeys, profileData })
   
   if (years.length === 0) {
     console.log('❌ No years found in scope emissions data')
@@ -486,22 +499,22 @@ const scopeEmissionsData = computed(() => {
     'Scope 3': { bg: 'rgba(16, 185, 129, 0.7)', border: 'rgb(16, 185, 129)' }
   }
 
-  Object.keys(profileData).forEach(scopeKey => {
+  scopeKeys.forEach(scopeKey => {
     const scopeValues = profileData[scopeKey]
     if (scopeValues && typeof scopeValues === 'object') {
       // Combine heating, dhw, and electricity for each scope
       const combinedValues = years.map(year => {
-        const dateKey = `${year}-01-01`
-        const heating = scopeValues.heating?.[dateKey] || 0
-        const dhw = scopeValues.dhw?.[dateKey] || 0
-        const electricity = scopeValues.electricity?.[dateKey] || 0
+        const yearKey = year.toString()
+        const heating = scopeValues.heating?.[yearKey] || 0
+        const dhw = scopeValues.dhw?.[yearKey] || 0
+        const electricity = scopeValues.electricity?.[yearKey] || 0
         
         // Add LCA categories if available
-        const lca_base = scopeValues.lca_base?.[dateKey] || 0
-        const lca_roof = scopeValues.lca_roof?.[dateKey] || 0
-        const lca_window = scopeValues.lca_window?.[dateKey] || 0
-        const lca_facade = scopeValues.lca_facade?.[dateKey] || 0
-        const lca_hvac = scopeValues.lca_hvac?.[dateKey] || 0
+        const lca_base = scopeValues.lca_base?.[yearKey] || 0
+        const lca_roof = scopeValues.lca_roof?.[yearKey] || 0
+        const lca_window = scopeValues.lca_window?.[yearKey] || 0
+        const lca_facade = scopeValues.lca_facade?.[yearKey] || 0
+        const lca_hvac = scopeValues.lca_hvac?.[yearKey] || 0
         
         const totalValue = heating + dhw + electricity + lca_base + lca_roof + lca_window + lca_facade + lca_hvac
         return showPerNGF.value || !totalNGF.value ? totalValue : totalValue * totalNGF.value
@@ -631,7 +644,7 @@ const detailedScopeEmissionsData = computed(() => {
     return null
   }
 
-  const dateKey = `${selectedDetailYear.value}-01-01`
+  const yearKey = selectedDetailYear.value.toString()
   const baseCategories = ['heating', 'dhw', 'electricity']
   const lcaCategories = ['lca_base', 'lca_roof', 'lca_window', 'lca_facade', 'lca_hvac']
   
@@ -656,8 +669,8 @@ const detailedScopeEmissionsData = computed(() => {
     lca_hvac: { bg: 'rgba(99, 102, 241, 0.7)', border: 'rgb(99, 102, 241)' }
   }
 
-  // Get available scopes
-  const scopes = Object.keys(profileData).sort()
+  // Get available scopes - filter for scope keys that start with "Scope"
+  const scopes = Object.keys(profileData).filter(key => key.startsWith('Scope')).sort()
   
   // Determine which categories are actually available in the data
   const availableCategories: string[] = []
@@ -666,7 +679,7 @@ const detailedScopeEmissionsData = computed(() => {
   baseCategories.forEach(category => {
     const hasData = scopes.some(scopeKey => {
       const scopeValues = profileData[scopeKey]
-      return scopeValues?.[category]?.[dateKey] !== undefined
+      return scopeValues?.[category]?.[yearKey] !== undefined
     })
     if (hasData) {
       availableCategories.push(category)
@@ -677,7 +690,7 @@ const detailedScopeEmissionsData = computed(() => {
   lcaCategories.forEach(category => {
     const hasData = scopes.some(scopeKey => {
       const scopeValues = profileData[scopeKey]
-      return scopeValues?.[category]?.[dateKey] !== undefined
+      return scopeValues?.[category]?.[yearKey] !== undefined
     })
     if (hasData) {
       availableCategories.push(category)
@@ -690,7 +703,7 @@ const detailedScopeEmissionsData = computed(() => {
   availableCategories.forEach(category => {
     const categoryValues = scopes.map(scopeKey => {
       const scopeValues = profileData[scopeKey]
-      const value = scopeValues?.[category]?.[dateKey] || 0
+      const value = scopeValues?.[category]?.[yearKey] || 0
       return showPerNGF.value || !totalNGF.value ? value : value * totalNGF.value
     })
 
@@ -727,14 +740,28 @@ const availableDetailYears = computed(() => {
     return []
   }
 
-  // Get years from any scope data - now handling object keys directly
-  const firstScope = Object.keys(profileData)[0]
-  const firstCategory = Object.keys(profileData[firstScope] || {})[0]
-  const sampleData = profileData[firstScope]?.[firstCategory] || {}
+  // Get years from any scope data - handling the actual API structure
+  // Find the first scope that has data to extract years
+  let years: number[] = []
+  const scopeKeys = Object.keys(profileData).filter(key => key.startsWith('Scope'))
   
-  const years = Object.keys(sampleData)
-    .map(dateStr => parseInt(dateStr.split('-')[0]))
-    .sort((a, b) => a - b)
+  for (const scopeKey of scopeKeys) {
+    const scopeData = profileData[scopeKey]
+    if (scopeData && typeof scopeData === 'object') {
+      // Look for any category (heating, dhw, electricity) to get years
+      const categories = ['heating', 'dhw', 'electricity', 'lca_base', 'lca_roof', 'lca_window', 'lca_facade', 'lca_hvac']
+      for (const category of categories) {
+        if (scopeData[category] && typeof scopeData[category] === 'object') {
+          years = Object.keys(scopeData[category])
+            .map(yearStr => parseInt(yearStr))
+            .filter(year => !isNaN(year))
+            .sort((a, b) => a - b)
+          break
+        }
+      }
+      if (years.length > 0) break
+    }
+  }
 
   return years
 })
