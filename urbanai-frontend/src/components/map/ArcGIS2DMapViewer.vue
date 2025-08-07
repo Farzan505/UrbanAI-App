@@ -19,8 +19,8 @@
 
 <script setup lang="ts">
 import { onMounted, ref, watch, nextTick, onUnmounted } from 'vue'
-import { Card, CardHeader, CardTitle, CardContent } from '../ui/card'
 import { Skeleton } from '../ui/skeleton'
+import { useAuth } from '@/composables/useAuth'
 
 // Props
 interface Props {
@@ -34,10 +34,19 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // State
-const mapContainer = ref<HTMLElement | null>(null)
+const mapContainer = ref<HTMLDivElement | null>(null)
 const error = ref<string>('')
 let mapView: any = null
 let map: any = null
+let districtFeatureLayer: any = null
+let citygmlFeatureLayer: any = null
+
+// Authentication
+const { checkAuthStatus, getToken, isAuthenticated, login } = useAuth()
+
+// Environment variables (only need service URLs now)
+const ARCGIS_FEATURE_LAYER_ID = import.meta.env.VITE_ARCGIS_FEATURE_LAYER_ID
+const ARCGIS_FEATURE_SERVICE_URL = import.meta.env.VITE_ARCGIS_FEATURE_SERVICE_URL
 
 // Load ArcGIS CSS
 const loadArcgisCss = () => {
@@ -58,7 +67,7 @@ const initializeMap = async () => {
     console.log('🔄 Loading ArcGIS modules...')
     
     // Import modules with better error handling
-    const [MapModule, MapViewModule, GeoJSONLayerModule] = await Promise.all([
+    const [MapModule, MapViewModule, GeoJSONLayerModule, FeatureLayerModule, IdentityManagerModule] = await Promise.all([
       import('@arcgis/core/Map').catch(err => {
         console.error('Failed to load Map module:', err)
         throw err
@@ -70,14 +79,47 @@ const initializeMap = async () => {
       import('@arcgis/core/layers/GeoJSONLayer').catch(err => {
         console.error('Failed to load GeoJSONLayer module:', err)
         throw err
+      }),
+      import('@arcgis/core/layers/FeatureLayer').catch(err => {
+        console.error('Failed to load FeatureLayer module:', err)
+        throw err
+      }),
+      import('@arcgis/core/identity/IdentityManager').catch(err => {
+        console.error('Failed to load IdentityManager module:', err)
+        throw err
       })
     ])
 
     const Map = MapModule.default
     const MapView = MapViewModule.default
     const GeoJSONLayer = GeoJSONLayerModule.default
+    const FeatureLayer = FeatureLayerModule.default
+    const esriId = IdentityManagerModule.default
 
     console.log('✅ ArcGIS modules loaded successfully')
+
+    // Check authentication status with backend
+    const authStatus = await checkAuthStatus()
+    console.log('🔐 Backend auth status:', authStatus)
+
+    // If authenticated, get the token from backend
+    let accessToken = null
+    if (authStatus.authenticated) {
+      const tokenResponse = await getToken()
+      if (tokenResponse) {
+        accessToken = tokenResponse.access_token
+        console.log('✅ Got access token from backend')
+        
+        // Set the token in ArcGIS Identity Manager for authenticated requests
+        esriId.registerToken({
+          server: 'https://gisportal-stmb.bayern.de',
+          token: accessToken,
+          expires: Date.now() + (tokenResponse.expires_in * 1000)
+        })
+      }
+    } else {
+      console.log('🔑 Not authenticated with backend, some layers may not be accessible')
+    }
 
     // Remove previous view if any
     if (mapView) {
@@ -85,9 +127,147 @@ const initializeMap = async () => {
       mapView = null
     }
 
-    // Create map with simple basemap
+    // Create district feature layer with authentication handling
+    // Use proxy URL during development to avoid CORS issues
+    const serviceUrl = import.meta.env.DEV 
+      ? "/gisportal/server/rest/services/Hosted/citygml_data/FeatureServer/0"
+      : "https://gisportal-stmb.bayern.de/server/rest/services/Hosted/citygml_data/FeatureServer/0"
+    
+    districtFeatureLayer = new FeatureLayer({
+      url: serviceUrl,
+      visible: false, // Initially hidden
+      renderer: {
+        type: "simple",
+        symbol: {
+          type: "simple-fill",
+          color: [255, 128, 0, 0.3], // Orange with transparency
+          outline: {
+            color: [255, 128, 0, 1],
+            width: 2
+          }
+        }
+      },
+      popupTemplate: {
+        title: "District Information",
+        content: "District: {*}"
+      }
+    })
+
+    // Create CityGML feature layer using the specific layer ID
+    const citygmlServiceUrl = import.meta.env.DEV 
+      ? `/gisportal/server/rest/services/Hosted/citygml_data/FeatureServer`
+      : ARCGIS_FEATURE_SERVICE_URL
+
+    citygmlFeatureLayer = new FeatureLayer({
+      url: citygmlServiceUrl,
+      layerId: ARCGIS_FEATURE_LAYER_ID ? parseInt(ARCGIS_FEATURE_LAYER_ID) : 0,
+      visible: true, // Make it visible by default
+      renderer: {
+        type: "simple",
+        symbol: {
+          type: "simple-fill",
+          color: [0, 122, 194, 0.4], // Blue with transparency
+          outline: {
+            color: [0, 122, 194, 1],
+            width: 1.5
+          }
+        }
+      },
+      popupTemplate: {
+        title: "CityGML Building",
+        content: [
+          {
+            type: "fields",
+            fieldInfos: [
+              {
+                fieldName: "gmlid",
+                label: "GML ID"
+              },
+              {
+                fieldName: "function",
+                label: "Function"
+              },
+              {
+                fieldName: "usage",
+                label: "Usage"
+              },
+              {
+                fieldName: "yearOfConstruction",
+                label: "Year of Construction"
+              },
+              {
+                fieldName: "storeysAboveGround",
+                label: "Storeys Above Ground"
+              },
+              {
+                fieldName: "storeysBelowGround",
+                label: "Storeys Below Ground"
+              }
+            ]
+          }
+        ]
+      },
+      outFields: ["*"] // Fetch all fields for popup
+    })
+
+    // Create map with both feature layers
     map = new Map({
-      basemap: "gray-vector" // Use a simple predefined basemap
+      basemap: "gray-vector",
+      layers: [districtFeatureLayer, citygmlFeatureLayer]
+    })
+
+    // Add error handling for the district layer with authentication
+    districtFeatureLayer.when(() => {
+      console.log('✅ District feature layer loaded successfully')
+    }).catch(async (err: any) => {
+      console.warn('⚠️ District feature layer failed to load:', err)
+      
+      // If it's an authentication error, redirect to backend login
+      if (err.details && err.details.httpStatus === 401) {
+        console.log('🔑 Authentication required for district layer')
+        if (!isAuthenticated.value) {
+          console.log('🔄 Redirecting to backend login...')
+          await login()
+        } else {
+          console.log('❌ Already authenticated but still getting 401, removing layer')
+          if (map.layers.includes(districtFeatureLayer)) {
+            map.remove(districtFeatureLayer)
+          }
+        }
+      } else {
+        // For other errors, just remove the layer
+        console.error('❌ District layer error (non-auth):', err)
+        if (map.layers.includes(districtFeatureLayer)) {
+          map.remove(districtFeatureLayer)
+        }
+      }
+    })
+
+    // Add error handling for the CityGML feature layer with authentication
+    citygmlFeatureLayer.when(() => {
+      console.log('✅ CityGML feature layer loaded successfully')
+    }).catch(async (err: any) => {
+      console.warn('⚠️ CityGML feature layer failed to load:', err)
+      
+      // If it's an authentication error, redirect to backend login
+      if (err.details && err.details.httpStatus === 401) {
+        console.log('🔑 Authentication required for CityGML layer')
+        if (!isAuthenticated.value) {
+          console.log('🔄 Redirecting to backend login...')
+          await login()
+        } else {
+          console.log('❌ Already authenticated but still getting 401, removing layer')
+          if (map.layers.includes(citygmlFeatureLayer)) {
+            map.remove(citygmlFeatureLayer)
+          }
+        }
+      } else {
+        // For other errors, just remove the layer
+        console.error('❌ CityGML layer error (non-auth):', err)
+        if (map.layers.includes(citygmlFeatureLayer)) {
+          map.remove(citygmlFeatureLayer)
+        }
+      }
     })
 
     // Create map view
@@ -99,6 +279,15 @@ const initializeMap = async () => {
       constraints: {
         minZoom: 8,
         maxZoom: 20
+      }
+    })
+
+    // Watch for zoom level changes to show/hide district layer
+    mapView.watch("zoom", (zoom: number) => {
+      const shouldShowDistrict = zoom >= 10 && zoom <= 14 // District level zoom range
+      if (districtFeatureLayer) {
+        districtFeatureLayer.visible = shouldShowDistrict
+        console.log(`🔍 Zoom level: ${zoom}, District layer visible: ${shouldShowDistrict}`)
       }
     })
 
@@ -276,6 +465,16 @@ onUnmounted(() => {
   if (mapView) {
     mapView.destroy()
     mapView = null
+  }
+  
+  if (districtFeatureLayer) {
+    districtFeatureLayer.destroy()
+    districtFeatureLayer = null
+  }
+  
+  if (citygmlFeatureLayer) {
+    citygmlFeatureLayer.destroy()
+    citygmlFeatureLayer = null
   }
   
   map = null

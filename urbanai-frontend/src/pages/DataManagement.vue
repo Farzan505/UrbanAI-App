@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { toast } from 'vue-sonner'
 import ArcGIS2DMapViewer from '@/components/map/ArcGIS2DMapViewer.vue'
+import AuthStatus from '@/components/AuthStatus.vue'
 import { 
   Plus, 
   Trash2, 
@@ -589,7 +590,11 @@ const getStatusBadgeVariant = (value: string | null) => {
     <main class="w-full px-4 sm:px-6 lg:px-8 py-8 h-full overflow-auto">
       <div class="mb-8">
         <h1 class="text-3xl font-bold text-gray-900">Datenbearbeitung</h1>
-
+        
+        <!-- Authentication Status -->
+        <div class="mt-4">
+          <AuthStatus />
+        </div>
       </div>
 
       <!-- Error Message -->
