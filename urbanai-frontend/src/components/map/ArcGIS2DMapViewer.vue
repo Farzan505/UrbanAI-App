@@ -19,18 +19,20 @@
 
 <script setup lang="ts">
 import { onMounted, ref, watch, nextTick, onUnmounted } from 'vue'
-import { Card, CardHeader, CardTitle, CardContent } from '../ui/card'
 import { Skeleton } from '../ui/skeleton'
+import { useAuth } from '../../composables/useAuth'
 
 // Props
 interface Props {
   geometryData?: any
   isLoading?: boolean
+  portalItems?: any[]
 }
 
 const props = withDefaults(defineProps<Props>(), {
   geometryData: null,
-  isLoading: false
+  isLoading: false,
+  portalItems: () => []
 })
 
 // State
@@ -92,13 +94,13 @@ const initializeMap = async () => {
 
     // Create map view
     mapView = new MapView({
-      container: mapContainer.value,
+      container: mapContainer.value as HTMLDivElement,
       map: map,
       center: [11.5820, 48.1351], // Munich coordinates
       zoom: 12,
       constraints: {
         minZoom: 8,
-        maxZoom: 20
+        maxZoom: 20 // Allow zooming to higher levels to see buildings
       }
     })
 
@@ -112,6 +114,11 @@ const initializeMap = async () => {
     // Add geometry layer if data exists
     if (props.geometryData) {
       await addGeometryLayer(GeoJSONLayer)
+    }
+
+    // Add portal items as CityGML layers if available
+    if (props.portalItems && props.portalItems.length > 0) {
+      await addCityGmlFeatureLayer()
     }
 
     console.log('✅ ArcGIS 2D Map initialized successfully')
@@ -204,6 +211,158 @@ const addGeometryLayer = async (GeoJSONLayer: any) => {
   }
 }
 
+// Add CityGML portal item as FeatureLayer
+const addCityGmlFeatureLayer = async () => {
+  try {
+    if (!props.portalItems || props.portalItems.length === 0 || !mapView || !map) {
+      console.log('ℹ️ No portal items to add or map not ready')
+      return
+    }
+
+    console.log('🏢 Adding CityGML portal items as FeatureLayer:', props.portalItems.length)
+
+    const { getToken } = useAuth()
+    
+    // Import FeatureLayer module
+    const FeatureLayerModule = await import('@arcgis/core/layers/FeatureLayer')
+    const FeatureLayer = FeatureLayerModule.default
+
+    for (const item of props.portalItems) {
+      try {
+        console.log('🔍 Processing CityGML portal item:', item.title, 'Type:', item.type)
+        
+        // Check if this is a CityGML item (by title or type)
+        const isCityGML = item.title?.toLowerCase().includes('citygml') || 
+                         item.title?.toLowerCase().includes('cityml') ||
+                         item.type === 'Feature Service'
+        
+        if (!isCityGML) {
+          console.log(`⚠️ Skipping non-CityGML item: ${item.title}`)
+          continue
+        }
+
+        // Get authentication token
+        const token = await getToken()
+        
+        // Create the FeatureLayer URL (use proxy in development)
+        const baseUrl = item.url || `https://gisportal-stmb.bayern.de/server/rest/services/Hosted/citygml_data/FeatureServer`
+        const layerUrl = import.meta.env.DEV 
+          ? baseUrl.replace('https://gisportal-stmb.bayern.de', '/gisportal')
+          : baseUrl
+
+        console.log('🌐 Creating FeatureLayer from URL:', layerUrl)
+
+        // Create the FeatureLayer
+        const featureLayer = new FeatureLayer({
+          url: layerUrl + '/0', // Default to first layer
+          title: `${item.title} (CityGML)`,
+          apiKey: token,
+          visible: false, // Start hidden, will show based on zoom
+          minScale: 0, // No min scale limit
+          maxScale: 5000, // Only visible when zoomed in (approximately zoom level 15+)
+          
+          // Custom renderer for CityGML buildings
+          renderer: {
+            type: "simple",
+            symbol: {
+              type: "simple-fill",
+              color: [255, 165, 0, 0.7], // Orange color for CityGML buildings
+              outline: {
+                color: [255, 140, 0, 1],
+                width: 1
+              }
+            }
+          },
+          
+          // Custom popup template
+          popupTemplate: {
+            title: "CityGML Building",
+            content: [
+              {
+                type: "fields",
+                fieldInfos: [
+                  {
+                    fieldName: "OBJECTID",
+                    label: "Object ID"
+                  },
+                  {
+                    fieldName: "gmlid", 
+                    label: "GML ID"
+                  }
+                ]
+              }
+            ]
+          }
+        })
+
+        console.log('🔍 Loading CityGML FeatureLayer...')
+        await featureLayer.load()
+        console.log('✅ CityGML FeatureLayer loaded successfully:', featureLayer.title)
+
+        // Add layer to map
+        map.add(featureLayer)
+        console.log('✅ Added CityGML FeatureLayer to map')
+
+        // Watch for zoom changes to show/hide the CityGML layer
+        mapView.watch('zoom', (newZoom: number) => {
+          // Show layer only at zoom level 15 or higher (detailed building level)
+          const shouldShow = newZoom >= 15
+          if (featureLayer && featureLayer.visible !== shouldShow) {
+            featureLayer.visible = shouldShow
+            console.log(`🔍 CityGML FeatureLayer visibility: ${shouldShow} (zoom: ${newZoom})`)
+          }
+        })
+
+        // Set initial visibility based on current zoom
+        const currentZoom = mapView.zoom
+        featureLayer.visible = currentZoom >= 15
+        console.log(`🔍 Initial CityGML visibility: ${featureLayer.visible} (zoom: ${currentZoom})`)
+
+        // Try to zoom to a reasonable level to see buildings after a delay
+        setTimeout(async () => {
+          try {
+            if (featureLayer.fullExtent && mapView.ready) {
+              // Get the center of the layer extent
+              const center = featureLayer.fullExtent.center
+              if (center) {
+                // Zoom to level 15 (where buildings will be visible) at the center of the data
+                await mapView.goTo({
+                  center: center,
+                  zoom: 15
+                }, { 
+                  animate: true,
+                  duration: 1000
+                })
+                console.log('✅ Zoomed to CityGML layer center at zoom level 15')
+              }
+            }
+          } catch (zoomErr) {
+            console.warn('⚠️ Could not zoom to CityGML layer center:', zoomErr)
+          }
+        }, 1000)
+
+      } catch (itemErr) {
+        console.error(`❌ Error processing CityGML item ${item.title}:`, itemErr)
+        
+        // Show user-friendly error
+        if (itemErr instanceof Error) {
+          if (itemErr.message.includes('token') || itemErr.message.includes('auth')) {
+            error.value = `Authentifizierung für CityGML-Daten fehlgeschlagen`
+          } else if (itemErr.message.includes('CORS')) {
+            error.value = `CORS-Fehler beim Laden der CityGML-Daten`
+          } else {
+            error.value = `Fehler beim Laden der CityGML-Daten: ${itemErr.message}`
+          }
+        }
+      }
+    }
+
+  } catch (err) {
+    console.error('❌ Error adding CityGML FeatureLayer:', err)
+    error.value = `Failed to add CityGML data: ${err instanceof Error ? err.message : 'Unknown error'}`
+  }
+}
+
 // Update geometry when prop changes
 const updateGeometry = async () => {
   if (!mapView || !map) {
@@ -235,6 +394,26 @@ watch(() => props.geometryData, async (newData) => {
   
   if (mapView && map) {
     await updateGeometry()
+  } else {
+    console.log('⚠️ Map not ready, will update when initialized')
+  }
+}, { deep: true })
+
+// Watch for portal items changes
+watch(() => props.portalItems, async (newPortalItems) => {
+  console.log('👀 Portal items changed in 2D map:', { count: newPortalItems?.length || 0 })
+  
+  if (mapView && map) {
+    // Remove existing CityGML layers
+    const layersToRemove = map.layers.filter((layer: any) => 
+      layer.title?.includes('(CityGML)')
+    )
+    layersToRemove.forEach((layer: any) => map.remove(layer))
+    
+    // Add new CityGML portal items if available
+    if (newPortalItems && newPortalItems.length > 0) {
+      await addCityGmlFeatureLayer()
+    }
   } else {
     console.log('⚠️ Map not ready, will update when initialized')
   }
