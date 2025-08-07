@@ -13,6 +13,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { toast } from 'vue-sonner'
 import ArcGIS2DMapViewer from '@/components/map/ArcGIS2DMapViewer.vue'
 import AuthStatus from '@/components/AuthStatus.vue'
+import { useAuth } from '@/composables/useAuth'
 import { 
   Plus, 
   Trash2, 
@@ -23,7 +24,10 @@ import {
   Building, 
   CheckCircle, 
   AlertCircle,
-  Loader2
+  Loader2,
+  Database,
+  ExternalLink,
+  RefreshCw
 } from 'lucide-vue-next'
 
 // Router
@@ -80,6 +84,77 @@ const globalComment = ref('')
 const isUpdatingComment = ref(false)
 const buildingLevelFields = ref<any>({})
 const isUpdatingBuildingFields = ref(false)
+
+// Portal items functionality
+const { isAuthenticated, queryPortalItems, isLoading: authLoading, error: authError } = useAuth()
+const portalItems = ref<any[]>([])
+const isLoadingPortalItems = ref(false)
+const portalItemsError = ref('')
+const selectedPortalItem = ref<any>(null)
+const addingPortalItemToMap = ref<string | null>(null)
+
+// Query portal items
+const loadPortalItems = async () => {
+  try {
+    if (!isAuthenticated.value) {
+      portalItemsError.value = 'Authentication required to load portal items'
+      return
+    }
+
+    isLoadingPortalItems.value = true
+    portalItemsError.value = ''
+
+    console.log('🔍 Loading portal items...')
+    const result = await queryPortalItems('', 20)
+    
+    portalItems.value = result.results || []
+    console.log('✅ Portal items loaded:', portalItems.value.length)
+    
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+    portalItemsError.value = `Failed to load portal items: ${errorMessage}`
+    console.error('❌ Portal items error:', err)
+  } finally {
+    isLoadingPortalItems.value = false
+  }
+}
+
+// Load portal items when authenticated
+watch(isAuthenticated, (authenticated) => {
+  if (authenticated) {
+    console.log('🔐 User authenticated, loading portal items...')
+    loadPortalItems()
+  } else {
+    console.log('🚪 User not authenticated, clearing portal items')
+    portalItems.value = []
+    portalItemsError.value = ''
+  }
+}, { immediate: true })
+
+// Helper function to open URLs
+const openUrl = (url: string) => {
+  if (typeof window !== 'undefined') {
+    window.open(url, '_blank')
+  }
+}
+
+// Add portal item to map
+const addPortalItemToMap = async (item: any) => {
+  try {
+    addingPortalItemToMap.value = item.id
+    console.log('🗺️ Adding portal item to map:', item.title)
+    
+    // Set the selected portal item - the map will reactively update
+    selectedPortalItem.value = item
+    
+    toast.success(`Portal item "${item.title}" wurde zur Karte hinzugefügt`)
+  } catch (err) {
+    console.error('❌ Error adding portal item to map:', err)
+    toast.error('Fehler beim Hinzufügen des Portal-Items zur Karte')
+  } finally {
+    addingPortalItemToMap.value = null
+  }
+}
 
 // Interface for GMLID mapping
 interface GmlidMapping {
@@ -595,6 +670,126 @@ const getStatusBadgeVariant = (value: string | null) => {
         <div class="mt-4">
           <AuthStatus />
         </div>
+        
+        <!-- Portal Items Section -->
+        <div class="mt-6">
+          <Card>
+            <CardHeader>
+              <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                  <Database class="h-5 w-5 text-blue-600" />
+                  <CardTitle>Portal Items</CardTitle>
+                </div>
+                <Button 
+                  v-if="isAuthenticated" 
+                  @click="loadPortalItems" 
+                  :disabled="isLoadingPortalItems"
+                  size="sm"
+                  variant="outline"
+                >
+                  <RefreshCw :class="{ 'animate-spin': isLoadingPortalItems }" class="h-4 w-4 mr-2" />
+                  Aktualisieren
+                </Button>
+              </div>
+              <CardDescription>
+                {{ isAuthenticated ? 'Ihre Portal-Items aus dem ArcGIS Portal' : 'Melden Sie sich an, um Portal-Items anzuzeigen' }}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <!-- Not authenticated state -->
+              <div v-if="!isAuthenticated" class="text-center py-8">
+                <Database class="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                <h3 class="text-lg font-medium text-gray-900 mb-2">Authentifizierung erforderlich</h3>
+                <p class="text-gray-600">
+                  Melden Sie sich an, um Ihre Portal-Items anzuzeigen.
+                </p>
+              </div>
+
+              <!-- Loading state -->
+              <div v-else-if="isLoadingPortalItems" class="text-center py-8">
+                <Loader2 class="mx-auto h-8 w-8 text-blue-600 animate-spin mb-4" />
+                <p class="text-gray-600">Portal-Items werden geladen...</p>
+              </div>
+
+              <!-- Error state -->
+              <div v-else-if="portalItemsError" class="bg-red-50 border border-red-200 rounded-md p-4">
+                <div class="flex items-center space-x-2">
+                  <AlertCircle class="h-5 w-5 text-red-600" />
+                  <p class="text-sm text-red-600">{{ portalItemsError }}</p>
+                </div>
+              </div>
+
+              <!-- Portal items list -->
+              <div v-else-if="portalItems.length > 0">
+                <div class="mb-4">
+                  <p class="text-sm text-gray-600">{{ portalItems.length }} Portal-Items gefunden</p>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <Card v-for="item in portalItems" :key="item.id" class="hover:shadow-md transition-shadow">
+                    <CardContent class="p-4">
+                      <!-- Item thumbnail -->
+                      <div v-if="item.thumbnailUrl" class="mb-3">
+                        <img 
+                          :src="item.thumbnailUrl" 
+                          :alt="item.title"
+                          class="w-full h-32 object-cover rounded"
+                          @error="(e) => ((e.target as HTMLImageElement)?.style && ((e.target as HTMLImageElement).style.display = 'none'))"
+                        />
+                      </div>
+                      
+                      <!-- Item details -->
+                      <div>
+                        <h4 class="font-semibold text-sm mb-1 line-clamp-2">{{ item.title || 'Untitled' }}</h4>
+                        <p class="text-xs text-gray-600 mb-2">{{ item.type || 'Unknown type' }}</p>
+                        
+                        <div class="flex items-center justify-between text-xs text-gray-500 mb-2">
+                          <span>{{ item.numViews || 0 }} Aufrufe</span>
+                          <span>{{ new Date(item.created).toLocaleDateString('de-DE') }}</span>
+                        </div>
+                        
+                        <p v-if="item.snippet" class="text-xs text-gray-600 mb-3 line-clamp-2">{{ item.snippet }}</p>
+                        
+                        <!-- Action buttons -->
+                        <div class="flex gap-2">
+                          <Button 
+                            @click="() => addPortalItemToMap(item)"
+                            size="sm"
+                            variant="default"
+                            class="flex-1"
+                            :disabled="addingPortalItemToMap === item.id"
+                          >
+                            <MapPin class="h-3 w-3 mr-1" />
+                            <span v-if="addingPortalItemToMap === item.id">Wird hinzugefügt...</span>
+                            <span v-else>Zu Karte hinzufügen</span>
+                          </Button>
+                          <Button 
+                            v-if="item.itemPageUrl" 
+                            @click="() => openUrl(item.itemPageUrl)"
+                            size="sm"
+                            variant="outline"
+                            class="flex-shrink-0"
+                          >
+                            <ExternalLink class="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+
+              <!-- No items state -->
+              <div v-else class="text-center py-8">
+                <Database class="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                <h3 class="text-lg font-medium text-gray-900 mb-2">Keine Portal-Items gefunden</h3>
+                <p class="text-gray-600">
+                  Es wurden keine Portal-Items in Ihrem Account gefunden.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       <!-- Error Message -->
@@ -740,6 +935,7 @@ const getStatusBadgeVariant = (value: string | null) => {
             <ArcGIS2DMapViewer 
               :geometry-data="geometryData"
               :is-loading="isLoadingGeometry"
+              :portal-items="selectedPortalItem ? [selectedPortalItem] : []"
             />
 
         </Card>
