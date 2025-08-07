@@ -274,24 +274,38 @@ const addCityGmlFeatureLayer = async () => {
             }
           },
           
-          // Custom popup template
+          // Enhanced popup template with comprehensive data logging
           popupTemplate: {
-            title: "CityGML Building",
-            content: [
-              {
-                type: "fields",
-                fieldInfos: [
-                  {
-                    fieldName: "OBJECTID",
-                    label: "Object ID"
-                  },
-                  {
-                    fieldName: "gmlid", 
-                    label: "GML ID"
-                  }
-                ]
+            title: "CityGML Building - {gmlid}",
+            content: (feature: any) => {
+              // Log all available feature data to console
+              console.log('🏢 Building clicked! Full feature data:', feature)
+              console.log('🏢 Feature attributes:', feature.graphic?.attributes)
+              console.log('🏢 Feature geometry:', feature.graphic?.geometry)
+              console.log('🏢 Feature layer:', feature.graphic?.layer)
+              
+              // Create detailed content
+              const attributes = feature.graphic?.attributes || {}
+              let content = '<div style="max-height: 300px; overflow-y: auto;">'
+              content += '<h3>🏢 Building Information</h3>'
+              
+              // Display all available attributes
+              if (Object.keys(attributes).length > 0) {
+                content += '<table style="width: 100%; border-collapse: collapse;">'
+                for (const [key, value] of Object.entries(attributes)) {
+                  content += `<tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 4px; font-weight: bold; vertical-align: top;">${key}:</td>
+                    <td style="padding: 4px;">${value || 'N/A'}</td>
+                  </tr>`
+                }
+                content += '</table>'
+              } else {
+                content += '<p>No attribute data available</p>'
               }
-            ]
+              
+              content += '</div>'
+              return content
+            }
           }
         })
 
@@ -317,6 +331,29 @@ const addCityGmlFeatureLayer = async () => {
         const currentZoom = mapView.zoom
         featureLayer.visible = currentZoom >= 15
         console.log(`🔍 Initial CityGML visibility: ${featureLayer.visible} (zoom: ${currentZoom})`)
+
+        // Add click event listener to log additional data
+        mapView.on('click', (event: any) => {
+          console.log('🖱️ Map clicked at:', event.mapPoint)
+          console.log('🖱️ Screen coordinates:', event.x, event.y)
+          
+          // Perform a hit test to see what features are at the click location
+          mapView.hitTest(event).then((response: any) => {
+            console.log('🎯 Hit test results:', response)
+            if (response.results.length > 0) {
+              response.results.forEach((result: any, index: number) => {
+                console.log(`🎯 Hit result ${index}:`, result)
+                if (result.graphic) {
+                  console.log(`🎯 Graphic ${index} attributes:`, result.graphic.attributes)
+                  console.log(`🎯 Graphic ${index} geometry:`, result.graphic.geometry)
+                  console.log(`🎯 Graphic ${index} layer:`, result.graphic.layer?.title)
+                }
+              })
+            }
+          }).catch((error: any) => {
+            console.warn('⚠️ Hit test failed:', error)
+          })
+        })
 
         // Note: Removed automatic zoom to prevent map from jumping to layer extent
         // Users can manually zoom to see the layer data at zoom level 15+
