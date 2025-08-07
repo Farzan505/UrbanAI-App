@@ -259,7 +259,7 @@ const addCityGmlFeatureLayer = async () => {
           apiKey: token,
           visible: false, // Start hidden, will show based on zoom
           minScale: 0, // No min scale limit
-          maxScale: 5000, // Only visible when zoomed in (approximately zoom level 15+)
+          maxScale: 3000, // Only visible when zoomed in (approximately zoom level 15+)
           
           // Custom renderer for CityGML buildings
           renderer: {
@@ -318,28 +318,8 @@ const addCityGmlFeatureLayer = async () => {
         featureLayer.visible = currentZoom >= 15
         console.log(`🔍 Initial CityGML visibility: ${featureLayer.visible} (zoom: ${currentZoom})`)
 
-        // Try to zoom to a reasonable level to see buildings after a delay
-        setTimeout(async () => {
-          try {
-            if (featureLayer.fullExtent && mapView.ready) {
-              // Get the center of the layer extent
-              const center = featureLayer.fullExtent.center
-              if (center) {
-                // Zoom to level 15 (where buildings will be visible) at the center of the data
-                await mapView.goTo({
-                  center: center,
-                  zoom: 15
-                }, { 
-                  animate: true,
-                  duration: 1000
-                })
-                console.log('✅ Zoomed to CityGML layer center at zoom level 15')
-              }
-            }
-          } catch (zoomErr) {
-            console.warn('⚠️ Could not zoom to CityGML layer center:', zoomErr)
-          }
-        }, 1000)
+        // Note: Removed automatic zoom to prevent map from jumping to layer extent
+        // Users can manually zoom to see the layer data at zoom level 15+
 
       } catch (itemErr) {
         console.error(`❌ Error processing CityGML item ${item.title}:`, itemErr)
