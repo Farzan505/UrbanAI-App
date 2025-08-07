@@ -13,6 +13,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { toast } from 'vue-sonner'
 import ArcGIS2DMapViewer from '@/components/map/ArcGIS2DMapViewer.vue'
 import AuthStatus from '@/components/AuthStatus.vue'
+import { useAuth } from '@/composables/useAuth'
 import { 
   Plus, 
   Trash2, 
@@ -25,6 +26,9 @@ import {
   AlertCircle,
   Loader2
 } from 'lucide-vue-next'
+
+// Initialize authentication
+const { checkAuthStatus } = useAuth()
 
 // Router
 let route: any
@@ -231,13 +235,17 @@ watch(() => {
 }, { immediate: true })
 
 // Initialize from props or route
-onMounted(() => {
+onMounted(async () => {
   try {
     console.log('DataManagement mounted with route info:', { 
       propsGebid: props.gebid, 
       routeGebid: route.params.gebid, 
       routePath: route.path
     })
+    
+    // Initialize authentication check
+    console.log('🔐 Initializing authentication check...')
+    await checkAuthStatus()
     
     const initialGebid = props.gebid || route.params.gebid
     if (initialGebid && typeof initialGebid === 'string') {

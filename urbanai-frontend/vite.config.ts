@@ -28,6 +28,23 @@ export default defineConfig({
             console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
           });
         },
+      },
+      '/portal': {
+        target: 'https://gisportal-stmb.bayern.de/portal',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/portal/, ''),
+        secure: true,
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, _req, _res) => {
+            console.log('portal proxy error', err);
+          });
+          proxy.on('proxyReq', (proxyReq, req, _res) => {
+            console.log('Sending Portal Request to the Target:', req.method, req.url);
+          });
+          proxy.on('proxyRes', (proxyRes, req, _res) => {
+            console.log('Received Portal Response from the Target:', proxyRes.statusCode, req.url);
+          });
+        },
       }
     }
   }
