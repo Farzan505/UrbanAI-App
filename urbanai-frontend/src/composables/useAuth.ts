@@ -1,5 +1,4 @@
 import { ref, computed } from 'vue'
-import Portal from '@arcgis/core/portal/Portal'
 import OAuthInfo from '@arcgis/core/identity/OAuthInfo'
 import esriId from '@arcgis/core/identity/IdentityManager'
 import PortalQueryParams from '@arcgis/core/portal/PortalQueryParams'
@@ -15,13 +14,6 @@ interface AuthStatus {
   portal?: any
 }
 
-interface ArcGISCredential {
-  token: string
-  server: string
-  userId: string
-  expires?: number
-}
-
 // State
 const authStatus = ref<AuthStatus>({ authenticated: false })
 const isLoading = ref(false)
@@ -31,11 +23,6 @@ const portal = ref<any>(null)
 // OAuth Configuration
 const CLIENT_ID = import.meta.env.VITE_ARCGIS_CLIENT_ID || 'zkqNEDmXGPG1Ml2N'
 const PORTAL_URL_ENV = import.meta.env.VITE_ARCGIS_PORTAL_URL || 'https://www.arcgis.com'
-
-// Use proxy URL during development to avoid CORS issues
-const PORTAL_URL = import.meta.env.DEV 
-  ? '/portal'  // This will be proxied to https://gisportal-stmb.bayern.de/portal
-  : PORTAL_URL_ENV
 
 // Track if OAuth has been configured
 let oauthConfigured = false
@@ -86,37 +73,24 @@ export function useAuth() {
         const credential = await esriId.checkSignInStatus(PORTAL_URL_ENV + "/sharing")
         
         if (credential) {
-          console.log('✅ Found existing credential, loading portal...')
+          console.log('✅ Found existing credential')
           
-          // User is signed in, create portal and get user info
-          const portalInstance = new Portal({
-            authMode: "immediate"
-          })
-          
-          // Check if using a portal other than ArcGIS Online (following official sample pattern)
-          if (PORTAL_URL_ENV !== "https://www.arcgis.com") {
-            portalInstance.url = PORTAL_URL_ENV
+          // Following the official sample pattern - don't load portal immediately
+          // Just mark as authenticated with the credential info
+          const status: AuthStatus = {
+            authenticated: true,
+            user: {
+              username: credential.userId || 'User',
+              fullName: 'Authenticated User', 
+              email: undefined
+            },
+            portal: null // Will be loaded on demand to avoid CORS issues
           }
           
-          await portalInstance.load()
+          authStatus.value = status
           
-          if (portalInstance.user) {
-            const status: AuthStatus = {
-              authenticated: true,
-              user: {
-                username: portalInstance.user.username || '',
-                fullName: portalInstance.user.fullName || '',
-                email: portalInstance.user.email || undefined
-              },
-              portal: portalInstance
-            }
-            
-            authStatus.value = status
-            portal.value = portalInstance
-            
-            console.log('✅ User is authenticated:', status.user)
-            return status
-          }
+          console.log('✅ User is authenticated:', status.user)
+          return status
         }
       } catch (signInError) {
         // User is not signed in
@@ -190,7 +164,7 @@ export function useAuth() {
       error.value = ''
       
       // Check if user is signed in and get credential
-      const credential = await esriId.checkSignInStatus(PORTAL_URL + "/sharing")
+      const credential = await esriId.checkSignInStatus(PORTAL_URL_ENV + "/sharing")
       
       if (credential && credential.token) {
         console.log('✅ Token retrieved successfully')
@@ -216,7 +190,7 @@ export function useAuth() {
       
       // IdentityManager handles token refresh automatically
       // Just get a fresh credential
-      const credential = await esriId.getCredential(PORTAL_URL + "/sharing")
+      const credential = await esriId.getCredential(PORTAL_URL_ENV + "/sharing")
       
       if (credential && credential.token) {
         console.log('✅ Token refreshed successfully')
@@ -304,11 +278,44 @@ export function useAuth() {
     }
   }
 
-  // Query portal items (example from the sample)
+  // Query portal items (create portal on demand to avoid CORS during auth)
   const queryPortalItems = async (query: string = '', num: number = 20) => {
     try {
+      // Only create portal when specifically needed for querying
       if (!portal.value) {
-        throw new Error('Portal not available. Please login first.')
+        console.log('🔄 Creating portal instance for querying...')
+        // Import Portal dynamically to avoid loading it unnecessarily
+        const { default: Portal } = await import('@arcgis/core/portal/Portal')
+        
+        const portalInstance = new Portal({
+          authMode: "immediate"
+        })
+        
+        // Set URL if not ArcGIS Online
+        if (PORTAL_URL_ENV !== "https://www.arcgis.com") {
+          portalInstance.url = PORTAL_URL_ENV
+        }
+        
+        try {
+          await portalInstance.load()
+          portal.value = portalInstance
+          
+          // Update user info if available
+          if (portalInstance.user && authStatus.value.authenticated) {
+            authStatus.value = {
+              ...authStatus.value,
+              user: {
+                username: portalInstance.user.username || 'User',
+                fullName: portalInstance.user.fullName || 'Authenticated User',
+                email: portalInstance.user.email || undefined
+              },
+              portal: portalInstance
+            }
+          }
+        } catch (portalError) {
+          console.error('❌ Failed to load portal for querying:', portalError)
+          throw new Error('Cannot access portal due to CORS restrictions')
+        }
       }
       
       const queryParams = new PortalQueryParams({
