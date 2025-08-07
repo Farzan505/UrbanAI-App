@@ -12,8 +12,8 @@
       </span>
     </div>
     
-    <div v-if="currentUser" class="text-xs text-gray-500">
-      {{ currentUser.fullName || currentUser.username }}
+    <div v-if="authStatus.session_created" class="text-xs text-gray-500">
+      Session: {{ new Date(authStatus.session_created).toLocaleString() }}
     </div>
     
     <div class="ml-auto flex gap-2">
@@ -63,10 +63,10 @@ import { useAuth } from '@/composables/useAuth'
 
 // Authentication composable
 const { 
+  authStatus, 
   isLoading, 
   error, 
   isAuthenticated, 
-  currentUser,
   checkAuthStatus, 
   login, 
   logout 
