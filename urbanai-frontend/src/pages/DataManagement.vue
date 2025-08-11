@@ -489,6 +489,23 @@ const saveMappingChanges = async () => {
   }
 }
 
+// Helper functions for delete dialog
+const openDeleteDialog = (gmlid: string) => {
+  deletingGmlid.value = gmlid
+  isDeleteDialogOpen.value = true
+}
+
+const closeDeleteDialog = () => {
+  deletingGmlid.value = null
+  isDeleteDialogOpen.value = false
+}
+
+const confirmDelete = () => {
+  if (deletingGmlid.value) {
+    deleteGmlidMapping(deletingGmlid.value)
+  }
+}
+
 // Delete GMLID mapping
 const deleteGmlidMapping = async (gmlid: string) => {
   try {
@@ -517,8 +534,7 @@ const deleteGmlidMapping = async (gmlid: string) => {
       await searchBuilding(buildingData.value.gebid)
       
       // Reset delete state
-      deletingGmlid.value = null
-      isDeleteDialogOpen.value = false
+      closeDeleteDialog()
       
       toast.success('GMLID gelöscht', {
         description: `GMLID ${gmlid} wurde erfolgreich gelöscht.`
@@ -657,6 +673,33 @@ const getStatusBadgeVariant = (value: string | null) => {
   if (value === 'Ja') return 'default'
   if (value === 'Nein') return 'destructive'
   return 'secondary'
+}
+
+// Handle feature selection from map
+const handleFeatureSelected = (feature: { gmlid: string; attributes: any }) => {
+  console.log('🎯 Feature selected from map:', feature)
+  
+  // Check if GMLID already exists
+  const existingMapping = gmlidMappings.value.find(m => m.gmlid === feature.gmlid)
+  if (existingMapping) {
+    console.log('⚠️ GMLID already exists, not adding to input field')
+    toast.warning('GMLID bereits vorhanden', {
+      description: `GMLID ${feature.gmlid} ist bereits für dieses Gebäude zugeordnet.`
+    })
+    return
+  }
+  
+  // Populate the new GMLID input field
+  newGmlid.value = feature.gmlid
+  console.log('✅ Auto-populated GMLID input field with:', feature.gmlid)
+  
+  // Clear any previous error
+  newGmlidError.value = ''
+  
+  // Show success toast
+  toast.success('GMLID aus Karte übernommen', {
+    description: `GMLID ${feature.gmlid} wurde in das Eingabefeld eingefügt. Klicken Sie auf + zum Hinzufügen.`
+  })
 }
 </script>
 
@@ -853,7 +896,7 @@ const getStatusBadgeVariant = (value: string | null) => {
                 <div class="flex items-center gap-2 mb-2">
                   <Badge variant="outline" class="font-mono">{{ mapping.gmlid }}</Badge>
                   <span class="text-xs text-gray-500">{{ mapping.babez || '—' }}</span>
-                  <Button size="icon" variant="ghost" @click="() => { deletingGmlid.value = mapping.gmlid; isDeleteDialogOpen.value = true }" class="text-red-600 hover:text-red-700 ml-auto">
+                  <Button size="icon" variant="ghost" @click="() => openDeleteDialog(mapping.gmlid)" class="text-red-600 hover:text-red-700 ml-auto">
                     <Trash2 class="h-4 w-4" />
                   </Button>
                   <Button size="icon" variant="ghost" @click="() => startEditing(mapping)" class="ml-1">
@@ -885,11 +928,11 @@ const getStatusBadgeVariant = (value: string | null) => {
                 </div>
                 <div v-else class="flex flex-wrap gap-2 text-xs">
                   <!-- Only show GMLID-specific fields, not building-level fields -->
-                  <div v-for="field in (editableFields?.boolean_fields || []).filter(f => !['konsistent_citygml_fdh', 'bearbeitungsbedarf_ldbv', 'fdh_merge'].includes(f))" :key="field" class="flex items-center gap-1">
+                  <div v-for="field in (editableFields?.boolean_fields || []).filter((f: string) => !['konsistent_citygml_fdh', 'bearbeitungsbedarf_ldbv', 'fdh_merge'].includes(f))" :key="field" class="flex items-center gap-1">
                     <span class="font-medium">{{ field }}:</span>
                     <Badge :variant="getStatusBadgeVariant(mapping[field])">{{ mapping[field] || '—' }}</Badge>
                   </div>
-                  <div v-for="field in (editableFields?.text_fields || []).filter(f => f !== 'kommentar')" :key="field" class="flex items-center gap-1">
+                  <div v-for="field in (editableFields?.text_fields || []).filter((f: string) => f !== 'kommentar')" :key="field" class="flex items-center gap-1">
                     <span class="font-medium">{{ field }}:</span>
                     <span>{{ mapping[field] || '—' }}</span>
                   </div>
@@ -913,13 +956,21 @@ const getStatusBadgeVariant = (value: string | null) => {
               </div>
             </div>
             <div class="mt-4 flex gap-2">
-              <Input
-                id="new-gmlid"
-                v-model="newGmlid"
-                placeholder="Neue GMLID hinzufügen..."
-                :class="{ 'border-red-500': newGmlidError }"
-                @keyup.enter="addGmlidMapping"
-              />
+              <div class="flex-1">
+                <Input
+                  id="new-gmlid"
+                  v-model="newGmlid"
+                  placeholder="Neue GMLID hinzufügen oder Gebäude in der Karte auswählen..."
+                  :class="{ 
+                    'border-red-500': newGmlidError,
+                    'border-green-500 bg-green-50': newGmlid && !newGmlidError
+                  }"
+                  @keyup.enter="addGmlidMapping"
+                />
+                <p v-if="newGmlid && !newGmlidError" class="text-xs text-green-600 mt-1">
+                  💡 GMLID bereit zum Hinzufügen - drücken Sie Enter oder klicken Sie auf +
+                </p>
+              </div>
               <Button @click="addGmlidMapping" :disabled="isAddingGmlid || !newGmlid.trim()">
                 <Plus class="h-4 w-4" />
               </Button>
@@ -936,6 +987,7 @@ const getStatusBadgeVariant = (value: string | null) => {
               :geometry-data="geometryData"
               :is-loading="isLoadingGeometry"
               :portal-items="selectedPortalItem ? [selectedPortalItem] : []"
+              @feature-selected="handleFeatureSelected"
             />
 
         </Card>
@@ -962,11 +1014,11 @@ const getStatusBadgeVariant = (value: string | null) => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel @click="() => { deletingGmlid = null; isDeleteDialogOpen = false }">
+            <AlertDialogCancel @click="closeDeleteDialog">
               Abbrechen
             </AlertDialogCancel>
             <AlertDialogAction
-              @click="() => { if (deletingGmlid) deleteGmlidMapping(deletingGmlid); }"
+              @click="confirmDelete"
               class="bg-red-600 hover:bg-red-700"
             >
               Löschen

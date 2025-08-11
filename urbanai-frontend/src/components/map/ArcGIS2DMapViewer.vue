@@ -35,6 +35,11 @@ const props = withDefaults(defineProps<Props>(), {
   portalItems: () => []
 })
 
+// Emits
+const emit = defineEmits<{
+  featureSelected: [feature: { gmlid: string; attributes: any }]
+}>()
+
 // State
 const mapContainer = ref<HTMLElement | null>(null)
 const error = ref<string>('')
@@ -284,10 +289,20 @@ const addCityGmlFeatureLayer = async () => {
               console.log('🏢 Feature geometry:', feature.graphic?.geometry)
               console.log('🏢 Feature layer:', feature.graphic?.layer)
               
-              // Create detailed content
+              // Emit feature selection event if gmlid is available
               const attributes = feature.graphic?.attributes || {}
+              if (attributes.gmlid) {
+                console.log('📤 Emitting feature selected event with gmlid:', attributes.gmlid)
+                emit('featureSelected', { 
+                  gmlid: attributes.gmlid, 
+                  attributes: attributes 
+                })
+              }
+              
+              // Create detailed content
               let content = '<div style="max-height: 300px; overflow-y: auto;">'
               content += '<h3>🏢 Building Information</h3>'
+              content += '<p style="background-color: #e3f2fd; padding: 8px; border-radius: 4px; margin-bottom: 12px;">💡 Das GMLID wurde automatisch in das Eingabefeld übernommen!</p>'
               
               // Display all available attributes
               if (Object.keys(attributes).length > 0) {
