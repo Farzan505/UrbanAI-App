@@ -27,17 +27,20 @@ interface Props {
   geometryData?: any
   isLoading?: boolean
   portalItems?: any[]
+  drawingMode?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   geometryData: null,
   isLoading: false,
-  portalItems: () => []
+  portalItems: () => [],
+  drawingMode: false
 })
 
 // Emits
 const emit = defineEmits<{
   featureSelected: [feature: { gmlid: string; attributes: any }]
+  lineDrawn: [lineData: { geometry: any; id: string }]
 }>()
 
 // State
@@ -45,6 +48,8 @@ const mapContainer = ref<HTMLElement | null>(null)
 const error = ref<string>('')
 let mapView: any = null
 let map: any = null
+let sketchViewModel: any = null
+let drawingLayer: any = null
 
 // Load ArcGIS CSS
 const loadArcgisCss = () => {
@@ -65,7 +70,7 @@ const initializeMap = async () => {
     console.log('🔄 Loading ArcGIS modules...')
     
     // Import modules with better error handling
-    const [MapModule, MapViewModule, GeoJSONLayerModule] = await Promise.all([
+    const [MapModule, MapViewModule, GeoJSONLayerModule, GraphicsLayerModule, SketchViewModelModule] = await Promise.all([
       import('@arcgis/core/Map').catch(err => {
         console.error('Failed to load Map module:', err)
         throw err
@@ -77,12 +82,22 @@ const initializeMap = async () => {
       import('@arcgis/core/layers/GeoJSONLayer').catch(err => {
         console.error('Failed to load GeoJSONLayer module:', err)
         throw err
+      }),
+      import('@arcgis/core/layers/GraphicsLayer').catch(err => {
+        console.error('Failed to load GraphicsLayer module:', err)
+        throw err
+      }),
+      import('@arcgis/core/widgets/Sketch/SketchViewModel').catch(err => {
+        console.error('Failed to load SketchViewModel module:', err)
+        throw err
       })
     ])
 
     const Map = MapModule.default
     const MapView = MapViewModule.default
     const GeoJSONLayer = GeoJSONLayerModule.default
+    const GraphicsLayer = GraphicsLayerModule.default
+    const SketchViewModel = SketchViewModelModule.default
 
     console.log('✅ ArcGIS modules loaded successfully')
 
@@ -92,9 +107,15 @@ const initializeMap = async () => {
       mapView = null
     }
 
+    // Create drawing layer for line sketches
+    drawingLayer = new GraphicsLayer({
+      title: 'Drawing Layer'
+    })
+
     // Create map with simple basemap
     map = new Map({
-      basemap: "gray-vector" // Use a simple predefined basemap
+      basemap: "gray-vector", // Use a simple predefined basemap
+      layers: [drawingLayer]
     })
 
     // Create map view
@@ -112,6 +133,9 @@ const initializeMap = async () => {
     // Wait for the view to be fully ready
     await mapView.when()
     console.log('✅ MapView is ready')
+
+    // Initialize sketch functionality
+    setupSketchViewModel(SketchViewModel)
 
     // Add small delay to ensure all initialization is complete
     await new Promise(resolve => setTimeout(resolve, 200))
@@ -395,6 +419,69 @@ const addCityGmlFeatureLayer = async () => {
   }
 }
 
+// Setup sketch functionality for line drawing
+const setupSketchViewModel = (SketchViewModel: any) => {
+  try {
+    if (!mapView || !drawingLayer) {
+      console.warn('⚠️ MapView or drawing layer not ready for sketch setup')
+      return
+    }
+
+    console.log('🖊️ Setting up sketch functionality')
+
+    // Create SketchViewModel
+    sketchViewModel = new SketchViewModel({
+      view: mapView,
+      layer: drawingLayer,
+      creationMode: 'single', // Only allow one line at a time
+      updateOnGraphicClick: false, // Disable editing after creation
+      pointSymbol: {
+        type: 'simple-marker',
+        color: [255, 0, 0],
+        size: 8,
+        outline: {
+          color: [255, 255, 255],
+          width: 2
+        }
+      },
+      polylineSymbol: {
+        type: 'simple-line',
+        color: [255, 0, 0, 0.8],
+        width: 3,
+        cap: 'round',
+        join: 'round'
+      }
+    })
+
+    // Listen for create events
+    sketchViewModel.on('create', (event: any) => {
+      if (event.state === 'complete') {
+        console.log('✏️ Line drawing completed:', event)
+        
+        const graphic = event.graphic
+        if (graphic && graphic.geometry) {
+          // Generate unique ID for the line
+          const lineId = `line_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+          
+          // Emit the line data
+          emit('lineDrawn', {
+            geometry: graphic.geometry.toJSON(),
+            id: lineId
+          })
+          
+          console.log('✅ Line emitted with ID:', lineId)
+        }
+      }
+    })
+
+    console.log('✅ Sketch functionality setup complete')
+
+  } catch (err) {
+    console.error('❌ Error setting up sketch functionality:', err)
+    error.value = `Failed to setup drawing: ${err instanceof Error ? err.message : 'Unknown error'}`
+  }
+}
+
 // Update geometry when prop changes
 const updateGeometry = async () => {
   if (!mapView || !map) {
@@ -450,6 +537,23 @@ watch(() => props.portalItems, async (newPortalItems) => {
     console.log('⚠️ Map not ready, will update when initialized')
   }
 }, { deep: true })
+
+// Watch for drawing mode changes
+watch(() => props.drawingMode, (newDrawingMode) => {
+  console.log('👀 Drawing mode changed:', newDrawingMode)
+  
+  if (sketchViewModel) {
+    if (newDrawingMode) {
+      console.log('✏️ Activating line drawing mode')
+      sketchViewModel.create('polyline')
+    } else {
+      console.log('🚫 Deactivating line drawing mode')
+      sketchViewModel.cancel()
+    }
+  } else {
+    console.warn('⚠️ SketchViewModel not ready for drawing mode change')
+  }
+})
 
 // Initialize map on mount
 onMounted(async () => {

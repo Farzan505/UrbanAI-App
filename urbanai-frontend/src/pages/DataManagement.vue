@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from 'vue-sonner'
 import ArcGIS2DMapViewer from '@/components/map/ArcGIS2DMapViewer.vue'
 import AuthStatus from '@/components/AuthStatus.vue'
@@ -27,7 +28,12 @@ import {
   Loader2,
   Database,
   ExternalLink,
-  RefreshCw
+  RefreshCw,
+  Scissors,
+  PenTool,
+  Square,
+  Play,
+  Pause
 } from 'lucide-vue-next'
 
 // Router
@@ -92,6 +98,13 @@ const isLoadingPortalItems = ref(false)
 const portalItemsError = ref('')
 const selectedPortalItem = ref<any>(null)
 const addingPortalItemToMap = ref<string | null>(null)
+
+// Line drawing functionality
+const drawnLines = ref<any[]>([])
+const isDrawingMode = ref(false)
+const selectedLine = ref<any>(null)
+const isProcessingLine = ref(false)
+const activeTab = ref('gmlid-management')
 
 // Query portal items
 const loadPortalItems = async () => {
@@ -701,6 +714,111 @@ const handleFeatureSelected = (feature: { gmlid: string; attributes: any }) => {
     description: `GMLID ${feature.gmlid} wurde in das Eingabefeld eingefügt. Klicken Sie auf + zum Hinzufügen.`
   })
 }
+
+// Handle line drawing from map
+const handleLineDrawn = (lineData: { geometry: any; id: string }) => {
+  console.log('✏️ Line drawn on map:', lineData)
+  
+  // Add the line to our collection
+  const newLine = {
+    id: lineData.id,
+    geometry: lineData.geometry,
+    gebid: buildingData.value?.gebid,
+    createdAt: new Date().toISOString(),
+    processed: false
+  }
+  
+  drawnLines.value.push(newLine)
+  
+  toast.success('Linie gezeichnet', {
+    description: 'Die Schnittlinie wurde erfolgreich erstellt und kann nun verarbeitet werden.'
+  })
+  
+  console.log('✅ Added line to collection:', newLine)
+}
+
+// Toggle drawing mode
+const toggleDrawingMode = () => {
+  isDrawingMode.value = !isDrawingMode.value
+  console.log('🖊️ Drawing mode toggled:', isDrawingMode.value)
+  
+  toast.info(isDrawingMode.value ? 'Zeichenmodus aktiviert' : 'Zeichenmodus deaktiviert', {
+    description: isDrawingMode.value 
+      ? 'Klicken Sie auf die Karte, um eine Schnittlinie zu zeichnen.'
+      : 'Zeichenmodus wurde deaktiviert.'
+  })
+}
+
+// Process line for 3D cutting
+const processLineFor3DCutting = async (line: any) => {
+  try {
+    isProcessingLine.value = true
+    selectedLine.value = line
+    
+    console.log('🔄 Processing line for 3D cutting:', line)
+    
+    // Prepare the payload for the backend
+    const payload = {
+      gebid: line.gebid,
+      lineGeometry: line.geometry,
+      lineId: line.id,
+      operation: '3d_cut',
+      timestamp: new Date().toISOString()
+    }
+    
+    console.log('📤 Sending line geometry to backend:', payload)
+    
+    // TODO: Replace with actual backend endpoint
+    // const response = await fetch(`${apiBaseUrl.value}/api/3d-cutting/process-line`, {
+    //   method: 'POST',
+    //   headers: {
+    //     'Content-Type': 'application/json',
+    //   },
+    //   body: JSON.stringify(payload)
+    // })
+    
+    // For now, simulate the request
+    await new Promise(resolve => setTimeout(resolve, 2000))
+    
+    // Mark line as processed
+    line.processed = true
+    line.processedAt = new Date().toISOString()
+    
+    toast.success('Linie verarbeitet', {
+      description: 'Die Schnittlinie wurde erfolgreich für das 3D-Schneiden verarbeitet.'
+    })
+    
+    console.log('✅ Line processed successfully:', line)
+    
+  } catch (err) {
+    console.error('❌ Error processing line:', err)
+    toast.error('Fehler bei der Verarbeitung', {
+      description: `Fehler beim Verarbeiten der Linie: ${err instanceof Error ? err.message : 'Unbekannter Fehler'}`
+    })
+  } finally {
+    isProcessingLine.value = false
+    selectedLine.value = null
+  }
+}
+
+// Delete a drawn line
+const deleteLine = (lineId: string) => {
+  const index = drawnLines.value.findIndex(line => line.id === lineId)
+  if (index > -1) {
+    drawnLines.value.splice(index, 1)
+    toast.success('Linie gelöscht', {
+      description: 'Die Schnittlinie wurde erfolgreich entfernt.'
+    })
+  }
+}
+
+// Clear all drawn lines
+const clearAllLines = () => {
+  drawnLines.value = []
+  toast.success('Alle Linien gelöscht', {
+    description: 'Alle Schnittlinien wurden erfolgreich entfernt.'
+  })
+}
 </script>
 
 <template>
@@ -845,9 +963,25 @@ const handleFeatureSelected = (feature: { gmlid: string; attributes: any }) => {
         </div>
       </div>
 
-      <div v-if="buildingData && !isSearching" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- Left: GMLID Management Card -->
-        <Card class="h-full flex flex-col">
+      <div v-if="buildingData && !isSearching" class="space-y-6">
+        <!-- Tabs for different management tools -->
+        <Tabs v-model="activeTab" class="w-full">
+          <TabsList class="grid w-full grid-cols-2">
+            <TabsTrigger value="gmlid-management">
+              <MapPin class="h-4 w-4 mr-2" />
+              GMLID-Verwaltung
+            </TabsTrigger>
+            <TabsTrigger value="line-drawing">
+              <Scissors class="h-4 w-4 mr-2" />
+              3D-Schneiden
+            </TabsTrigger>
+          </TabsList>
+
+          <!-- GMLID Management Tab -->
+          <TabsContent value="gmlid-management" class="mt-6">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <!-- Left: GMLID Management Card -->
+              <Card class="h-full flex flex-col">
           <CardHeader>
             <CardTitle class="flex items-center space-x-2">
               <MapPin class="h-5 w-5" />
@@ -990,7 +1124,132 @@ const handleFeatureSelected = (feature: { gmlid: string; attributes: any }) => {
               @feature-selected="handleFeatureSelected"
             />
 
-        </Card>
+              </Card>
+            </div>
+          </TabsContent>
+
+          <!-- Line Drawing Tab -->
+          <TabsContent value="line-drawing" class="mt-6">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <!-- Left: Line Drawing Controls -->
+              <Card class="h-full flex flex-col">
+                <CardHeader>
+                  <CardTitle class="flex items-center space-x-2">
+                    <Scissors class="h-5 w-5" />
+                    <span>3D-Schnittlinien</span>
+                  </CardTitle>
+                  <CardDescription>
+                    Zeichnen Sie Linien auf dem Gebäudegrundriss, um das 3D-Gebäude zu schneiden.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent class="flex-1 flex flex-col">
+                  <!-- Drawing Controls -->
+                  <div class="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div class="flex items-center justify-between mb-4">
+                      <Label class="text-sm font-medium text-blue-800">Zeichenmodus</Label>
+                      <Button 
+                        @click="toggleDrawingMode" 
+                        :variant="isDrawingMode ? 'default' : 'outline'"
+                        size="sm"
+                      >
+                        <PenTool class="h-4 w-4 mr-2" />
+                        {{ isDrawingMode ? 'Deaktivieren' : 'Aktivieren' }}
+                      </Button>
+                    </div>
+                    <p class="text-sm text-blue-700">
+                      {{ isDrawingMode 
+                        ? '✏️ Zeichenmodus aktiv - Klicken Sie auf die Karte, um eine Linie zu zeichnen.' 
+                        : '📍 Aktivieren Sie den Zeichenmodus, um Schnittlinien zu erstellen.' 
+                      }}
+                    </p>
+                  </div>
+
+                  <!-- Drawn Lines List -->
+                  <div class="flex-1">
+                    <div class="flex items-center justify-between mb-4">
+                      <Label class="text-sm font-medium">Gezeichnete Linien ({{ drawnLines.length }})</Label>
+                      <Button 
+                        v-if="drawnLines.length > 0" 
+                        @click="clearAllLines" 
+                        variant="outline" 
+                        size="sm"
+                      >
+                        <Trash2 class="h-4 w-4 mr-2" />
+                        Alle löschen
+                      </Button>
+                    </div>
+
+                    <div v-if="drawnLines.length > 0" class="space-y-2 max-h-96 overflow-y-auto">
+                      <div 
+                        v-for="line in drawnLines" 
+                        :key="line.id" 
+                        class="flex items-center gap-3 p-3 bg-gray-50 border rounded-lg"
+                      >
+                        <div class="flex-1">
+                          <div class="flex items-center gap-2 mb-1">
+                            <Badge variant="outline" class="font-mono text-xs">{{ line.id.substring(0, 8) }}...</Badge>
+                            <Badge :variant="line.processed ? 'default' : 'secondary'">
+                              {{ line.processed ? 'Verarbeitet' : 'Ausstehend' }}
+                            </Badge>
+                          </div>
+                          <p class="text-xs text-gray-600">
+                            Erstellt: {{ new Date(line.createdAt).toLocaleString('de-DE') }}
+                          </p>
+                          <p v-if="line.processedAt" class="text-xs text-green-600">
+                            Verarbeitet: {{ new Date(line.processedAt).toLocaleString('de-DE') }}
+                          </p>
+                        </div>
+                        
+                        <div class="flex gap-1">
+                          <Button 
+                            v-if="!line.processed"
+                            @click="processLineFor3DCutting(line)" 
+                            :disabled="isProcessingLine && selectedLine?.id === line.id"
+                            size="sm"
+                            variant="default"
+                          >
+                            <Play v-if="!(isProcessingLine && selectedLine?.id === line.id)" class="h-3 w-3 mr-1" />
+                            <Loader2 v-else class="h-3 w-3 mr-1 animate-spin" />
+                            {{ isProcessingLine && selectedLine?.id === line.id ? 'Verarbeitung...' : 'Verarbeiten' }}
+                          </Button>
+                          
+                          <Button 
+                            @click="deleteLine(line.id)" 
+                            size="sm" 
+                            variant="outline"
+                            class="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 class="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div v-else class="text-center text-gray-400 py-12">
+                      <Square class="mx-auto h-12 w-12 mb-4" />
+                      <h3 class="text-lg font-medium text-gray-900 mb-2">Keine Linien gezeichnet</h3>
+                      <p class="text-gray-600">
+                        Aktivieren Sie den Zeichenmodus und zeichnen Sie eine Linie auf dem Gebäudegrundriss.
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <!-- Right: Map Card (same as GMLID tab) -->
+              <Card class="h-full flex flex-col">
+                <ArcGIS2DMapViewer 
+                  :geometry-data="geometryData"
+                  :is-loading="isLoadingGeometry"
+                  :portal-items="selectedPortalItem ? [selectedPortalItem] : []"
+                  :drawing-mode="isDrawingMode"
+                  @feature-selected="handleFeatureSelected"
+                  @line-drawn="handleLineDrawn"
+                />
+              </Card>
+            </div>
+          </TabsContent>
+        </Tabs>
       </div>
 
       <!-- Welcome State -->
