@@ -41,6 +41,7 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   featureSelected: [feature: { gmlid: string; attributes: any }]
   lineDrawn: [lineData: { geometry: any; id: string }]
+  clearDrawnLines: []
 }>()
 
 // State
@@ -463,6 +464,12 @@ const setupSketchViewModel = (SketchViewModel: any) => {
           // Generate unique ID for the line
           const lineId = `line_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
           
+          // Store the line ID in the graphic's attributes for later deletion
+          graphic.attributes = {
+            lineId: lineId,
+            createdAt: new Date().toISOString()
+          }
+          
           // Emit the line data
           emit('lineDrawn', {
             geometry: graphic.geometry.toJSON(),
@@ -537,6 +544,43 @@ watch(() => props.portalItems, async (newPortalItems) => {
     console.log('⚠️ Map not ready, will update when initialized')
   }
 }, { deep: true })
+
+// Clear all drawn lines from the map
+const clearDrawnLinesFromMap = () => {
+  if (drawingLayer) {
+    console.log('🧹 Clearing all drawn lines from map')
+    drawingLayer.removeAll()
+    console.log('✅ All drawn lines removed from map')
+  } else {
+    console.warn('⚠️ Drawing layer not available for clearing')
+  }
+}
+
+// Delete a specific line from the map by ID
+const deleteLineFromMap = (lineId: string) => {
+  if (drawingLayer) {
+    console.log('🗑️ Attempting to delete line from map:', lineId)
+    // Find and remove the graphic with the matching line ID
+    const graphicsToRemove = drawingLayer.graphics.filter((graphic: any) => {
+      return graphic.attributes && graphic.attributes.lineId === lineId
+    })
+    
+    if (graphicsToRemove.length > 0) {
+      drawingLayer.removeMany(graphicsToRemove)
+      console.log('✅ Line removed from map:', lineId)
+    } else {
+      console.warn('⚠️ Line not found on map:', lineId)
+    }
+  } else {
+    console.warn('⚠️ Drawing layer not available for line deletion')
+  }
+}
+
+// Expose functions to parent component
+defineExpose({
+  clearDrawnLines: clearDrawnLinesFromMap,
+  deleteLine: deleteLineFromMap
+})
 
 // Watch for drawing mode changes
 watch(() => props.drawingMode, (newDrawingMode) => {

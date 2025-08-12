@@ -105,6 +105,8 @@ const isDrawingMode = ref(false)
 const selectedLine = ref<any>(null)
 const isProcessingLine = ref(false)
 const activeTab = ref('gmlid-management')
+const mapViewerRef = ref<any>(null)
+const lineDrawingMapRef = ref<any>(null)
 
 // Query portal items
 const loadPortalItems = async () => {
@@ -805,7 +807,14 @@ const processLineFor3DCutting = async (line: any) => {
 const deleteLine = (lineId: string) => {
   const index = drawnLines.value.findIndex(line => line.id === lineId)
   if (index > -1) {
+    // Remove from local array
     drawnLines.value.splice(index, 1)
+    
+    // Remove from map
+    if (lineDrawingMapRef.value && lineDrawingMapRef.value.deleteLine) {
+      lineDrawingMapRef.value.deleteLine(lineId)
+    }
+    
     toast.success('Linie gelöscht', {
       description: 'Die Schnittlinie wurde erfolgreich entfernt.'
     })
@@ -814,7 +823,14 @@ const deleteLine = (lineId: string) => {
 
 // Clear all drawn lines
 const clearAllLines = () => {
+  // Clear from local array
   drawnLines.value = []
+  
+  // Clear from map (use the line drawing map ref)
+  if (lineDrawingMapRef.value && lineDrawingMapRef.value.clearDrawnLines) {
+    lineDrawingMapRef.value.clearDrawnLines()
+  }
+  
   toast.success('Alle Linien gelöscht', {
     description: 'Alle Schnittlinien wurden erfolgreich entfernt.'
   })
@@ -1118,6 +1134,7 @@ const clearAllLines = () => {
 
 
             <ArcGIS2DMapViewer 
+              ref="mapViewerRef"
               :geometry-data="geometryData"
               :is-loading="isLoadingGeometry"
               :portal-items="selectedPortalItem ? [selectedPortalItem] : []"
@@ -1239,6 +1256,7 @@ const clearAllLines = () => {
               <!-- Right: Map Card (same as GMLID tab) -->
               <Card class="h-full flex flex-col">
                 <ArcGIS2DMapViewer 
+                  ref="lineDrawingMapRef"
                   :geometry-data="geometryData"
                   :is-loading="isLoadingGeometry"
                   :portal-items="selectedPortalItem ? [selectedPortalItem] : []"
