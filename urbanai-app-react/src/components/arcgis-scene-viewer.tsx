@@ -17,7 +17,7 @@ import {
 
 export default function ArcGISSceneViewer({
   gmlIds,
-  apiBaseUrl = 'http://localhost:8080',
+  apiBaseUrl = 'https://api.decotwo.com',
   geometryData,
   geometryLoading = false,
   className = ''
