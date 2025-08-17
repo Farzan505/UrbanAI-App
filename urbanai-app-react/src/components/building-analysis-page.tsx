@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Spinner } from '@/components/ui/spinner'
 import { Building2, AlertCircle } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
 import ArcGISSceneViewer from './arcgis-scene-viewer'
@@ -171,132 +172,130 @@ export default function BuildingAnalysisPage() {
     <div className="h-full flex flex-col">
       {/* Main content area */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left side - 3D Scene Viewer */}
-        <div className="flex-1 relative">
-          <ArcGISSceneViewer 
-            gmlIds={gmlId ? [gmlId] : []}
-            geometryData={geometryData}
-            geometryLoading={isLoadingGeometry}
-          />
-        </div>
-
-        {/* Right side - Building Information Panel */}
-        <div className="w-96 border-l bg-background overflow-auto">
-          <div className="p-6 space-y-6">
-            {/* Header */}
-            <div>
-              <h2 className="text-2xl font-bold">Gebäudeanalyse</h2>
-              {gmlId ? (
-                <p className="text-sm text-muted-foreground">
-                  GML ID: {gmlId}
-                </p>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Geben Sie eine GML ID ein, um die Analyse zu starten
-                </p>
-              )}
-            </div>
-
-            {/* Loading state */}
-            {isLoadingGeometry && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-center py-8">
-                  <div className="flex flex-col items-center space-y-3">
-                    <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                    <p className="text-sm text-muted-foreground">Lade Gebäudedaten...</p>
-                  </div>
-                </div>
-                <div className="space-y-4">
-                  <Skeleton className="h-4 w-3/4" />
-                  <Skeleton className="h-4 w-1/2" />
-                  <Skeleton className="h-32 w-full" />
-                </div>
-              </div>
-            )}
-
-            {/* Error state */}
-            {error && !isLoadingGeometry && (
-              <div className="text-center py-8">
-                <AlertCircle className="mx-auto h-12 w-12 text-destructive mb-4" />
-                <p className="text-destructive font-medium">Fehler beim Laden der Daten</p>
-                <p className="text-sm text-muted-foreground mt-2">{error}</p>
-                <div className="space-y-2 mt-4">
-                  <Button 
-                    onClick={() => getGeometry(gmlId)} 
-                    variant="outline" 
-                  >
-                    Erneut versuchen
-                  </Button>
-                  {!isAuthenticated && (
-                    <Button 
-                      onClick={setTestToken} 
-                      variant="secondary"
-                      className="w-full"
-                    >
-                      JWT Token für Tests setzen
-                    </Button>
+        {/* Left side - Building Information Panel */}
+        <div className="w-96 border-r bg-background overflow-auto">
+          <div className="p-6">
+            {/* Single card containing all building information */}
+            <Card className="h-full">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Building2 className="h-5 w-5" />
+                  Gebäudeanalyse
+                </CardTitle>
+                <CardDescription>
+                  {gmlId ? (
+                    <>GML ID: {gmlId}</>
+                  ) : (
+                    <>Geben Sie eine GML ID ein, um die Analyse zu starten</>
                   )}
-                </div>
-              </div>
-            )}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
 
-            {/* Building Information */}
-            {gmlId && !error && !isLoadingGeometry && (
-              <div className="space-y-6">
-                {/* Gebäudeinformationen Card */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Building2 className="h-5 w-5" />
-                      Gebäudeinformationen
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {/* Gebäudeflächen */}
-                      <div>
-                        <label className="text-sm font-medium">Gebäudeflächen</label>
-                        {buildingSurfaceAreas ? (
-                          <div className="mt-2 space-y-2">
-                            {buildingSurfaceAreas.map((surface, index) => (
-                              <div key={index} className="flex justify-between items-center p-3 bg-muted rounded-lg">
-                                <span className="text-sm">{surface.label}</span>
-                                <span className="font-medium">{surface.value} {surface.unit}</span>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="mt-2 p-3 bg-muted rounded-lg text-center text-sm text-muted-foreground">
-                            Keine Flächendaten verfügbar
-                          </div>
-                        )}
+                {/* Loading state */}
+                {isLoadingGeometry && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-center py-8">
+                      <div className="flex flex-col items-center space-y-3">
+                        <Spinner size="lg" />
+                        <p className="text-sm text-muted-foreground">Lade Gebäudedaten...</p>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-
-            {/* No GML ID state */}
-            {!gmlId && (
-              <div className="text-center py-8">
-                <Building2 className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                <p className="text-muted-foreground font-medium">Keine Gebäude-ID angegeben</p>
-                <p className="text-sm text-muted-foreground mt-2">
-                  Verwenden Sie die Suchleiste oben, um eine GML-ID einzugeben und die Gebäudeanalyse zu starten.
-                </p>
-                {!isAuthenticated && (
-                  <Button 
-                    onClick={setTestToken} 
-                    variant="secondary"
-                    className="mt-4"
-                  >
-                    JWT Token für Tests setzen
-                  </Button>
+                    <div className="space-y-4">
+                      <Skeleton className="h-4 w-3/4" />
+                      <Skeleton className="h-4 w-1/2" />
+                      <Skeleton className="h-32 w-full" />
+                    </div>
+                  </div>
                 )}
-              </div>
-            )}
+
+                {/* Error state */}
+                {error && !isLoadingGeometry && (
+                  <div className="text-center py-8">
+                    <AlertCircle className="mx-auto h-12 w-12 text-destructive mb-4" />
+                    <p className="text-destructive font-medium">Fehler beim Laden der Daten</p>
+                    <p className="text-sm text-muted-foreground mt-2">{error}</p>
+                    <div className="space-y-2 mt-4">
+                      <Button 
+                        onClick={() => getGeometry(gmlId)} 
+                        variant="outline" 
+                      >
+                        Erneut versuchen
+                      </Button>
+                      {!isAuthenticated && (
+                        <Button 
+                          onClick={setTestToken} 
+                          variant="secondary"
+                          className="w-full"
+                        >
+                          JWT Token für Tests setzen
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Building Information */}
+                {gmlId && !error && !isLoadingGeometry && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-4">Gebäudeflächen</h3>
+                    {buildingSurfaceAreas ? (
+                      <div className="space-y-2">
+                        {buildingSurfaceAreas.map((surface, index) => (
+                          <div key={index} className="flex justify-between items-center p-3 bg-muted rounded-lg">
+                            <span className="text-sm">{surface.label}</span>
+                            <span className="font-medium">{surface.value} {surface.unit}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-muted rounded-lg text-center text-sm text-muted-foreground">
+                        Keine Flächendaten verfügbar
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* No GML ID state */}
+                {!gmlId && (
+                  <div className="text-center py-8">
+                    <Building2 className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                    <p className="text-muted-foreground font-medium">Keine Gebäude-ID angegeben</p>
+                    <p className="text-sm text-muted-foreground mt-2">
+                      Verwenden Sie die Suchleiste oben, um eine GML-ID einzugeben und die Gebäudeanalyse zu starten.
+                    </p>
+                    {!isAuthenticated && (
+                      <Button 
+                        onClick={setTestToken} 
+                        variant="secondary"
+                        className="mt-4"
+                      >
+                        JWT Token für Tests setzen
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
+        </div>
+
+        {/* Right side - 3D Scene Viewer */}
+        <div className="flex-1 relative">
+          {isLoadingGeometry ? (
+            <div className="flex items-center justify-center h-full bg-muted/20">
+              <div className="flex flex-col items-center space-y-3">
+                <Spinner size="xl" />
+                <p className="text-sm text-muted-foreground">Lade 3D-Ansicht...</p>
+              </div>
+            </div>
+          ) : (
+            <ArcGISSceneViewer 
+              gmlIds={gmlId ? [gmlId] : []}
+              geometryData={geometryData}
+              geometryLoading={isLoadingGeometry}
+            />
+          )}
         </div>
       </div>
     </div>

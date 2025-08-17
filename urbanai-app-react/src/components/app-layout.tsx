@@ -15,7 +15,6 @@ interface AppLayoutProps {
 export default function AppLayout({ children }: AppLayoutProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { logout, user } = useAuth()
   const [searchTerm, setSearchTerm] = useState(searchParams.get('gmlid') || '')
 
   const handleSearch = () => {
@@ -31,10 +30,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
     }
   }
 
-  const handleLogout = () => {
-    logout()
-  }
-
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full">
@@ -43,7 +38,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
           {/* Header */}
           <header className="border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 sticky top-0 z-40">
             <div className="flex h-14 items-center px-4 gap-4">
-              <SidebarTrigger />
+              <SidebarTrigger className="mr-2" />
               
               {/* Search Bar */}
               <div className="flex-1 max-w-md">
@@ -61,15 +56,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 </div>
               </div>
 
-              {/* User menu */}
-              <div className="ml-auto flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">
-                  {user?.username || user?.name}
-                </span>
-                <Button variant="ghost" size="sm" onClick={handleLogout}>
-                  Abmelden
-                </Button>
-              </div>
+
             </div>
           </header>
 
