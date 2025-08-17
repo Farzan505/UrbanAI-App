@@ -1,4 +1,18 @@
 {
+  "name": "urbanai-platform",
+  "private": true,
+  "workspaces": [
+    "urbanai-app",
+    "urbanai-app-react"
+  ],
+  "scripts": {
+    "dev:vue": "cd urbanai-app && npm run dev",
+    "dev:react": "cd urbanai-app-react && npm run dev",
+    "build:vue": "cd urbanai-app && npm run build",
+    "build:react": "cd urbanai-app-react && npm run build",
+    "preview:vue": "cd urbanai-app && npm run preview",
+    "preview:react": "cd urbanai-app-react && npm run build && npm start"
+  },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.8",
     "tailwindcss": "^4.1.8"
